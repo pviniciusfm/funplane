@@ -1,0 +1,37 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: dockercore/golang-cross:1.10.3
+    environment:
+      - http_proxy: http://proxy-dev.frg.tech:3128
+      - https_proxy: http://proxy-dev.frg.tech:3128
+      - no_proxy: "127.0.0.1,.frg.tech,.fanaticslabs.com"
+      - BINARY_NAME: fanplane
+    working_directory: /go/src/jaxf-github.fanatics.corp/cloud/fanplane
+    steps:
+      - checkout
+      - run:
+          name: TODO list
+          command: |
+            make todo
+      - run:
+          name: Build
+          command: |
+            export PKG_VERSION=1.${CIRCLE_BUILD_NUM}
+            make -j release
+      - run:
+          name: Test
+          command: |
+            make test
+      - add_ssh_keys:
+          fingerprints:
+            - "df:57:b5:6e:ec:b6:c2:cd:03:99:37:55:a5:f8:28:84"
+      - run:
+          name: Publish
+          command: |
+            export PKG_VERSION=1.${CIRCLE_BUILD_NUM}
+            make -j publish
+            if [[ ${CIRCLE_BRANCH} == "master" ]]; then
+                ./ci/deploy.sh
+            fi
