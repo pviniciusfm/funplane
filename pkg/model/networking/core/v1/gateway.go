@@ -37,7 +37,7 @@ func LoadGateway(path string) (*Gateway, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading config file: %s", err)
 	}
-	cfg := new(Config)
+	cfg := new(Gateway)
 	err = yaml.Unmarshal(cfgBytes, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("parsing config: %s", err)
