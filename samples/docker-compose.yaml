@@ -1,0 +1,13 @@
+version: "2"
+
+services:
+  envoy:
+    image: envoyproxy/envoy
+    volumes:
+      - ./config:/etc/envoy
+    ports:
+      - "9000:9000"
+      - "19000:19000"
+    expose:
+      - "9000"
+      - "19000"
