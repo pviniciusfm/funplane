@@ -1,9 +1,6 @@
 package model
 
-import (
-	"github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	// "github.frg.tech/cloud/fanplane/pkg/model/networking/core/v1alpha3"
-)
+// "github.frg.tech/cloud/fanplane/pkg/model/networking/core/v1alpha3"
 
 // ConfigGenerator represents the interfaces to be implemented by code that generates xDS responses
 type ConfigGenerator interface {
@@ -17,13 +14,13 @@ type ConfigGenerator interface {
 	// BuildListeners returns the list of inbound/outbound listeners for the given proxy. This is the LDS output
 	// Internally, the computation will be optimized to ensure that listeners are computed only
 	// once and shared across multiple invocations of this function.
-	BuildListeners() ([]*v2.Listener, error)
+	// BuildListeners() ([]*v2.Listener, error)
 
 	// BuildClusters returns the list of clusters for the given proxy. This is the CDS output
-	BuildClusters() ([]*v2.Cluster, error)
+	// BuildClusters() ([]*v2.Cluster, error)
 
 	// BuildHTTPRoutes returns the list of HTTP routes for the given proxy. This is the RDS output
-	BuildHTTPRoutes(routeName string) (*v2.RouteConfiguration, error)
+	// BuildHTTPRoutes(routeName string) (*v2.RouteConfiguration, error)
 }
 
 // NewConfigGenerator creates a new instance of the dataplane configuration generator
