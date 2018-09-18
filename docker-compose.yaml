@@ -1,0 +1,8 @@
+version: "3"
+services:
+
+  fanplane:
+    build: ./
+    image: docker.repo.frg.tech/fanplane:${PKG_VERSION}
+    ports:
+      - "15001"

@@ -1,0 +1,82 @@
+# options for analysis running
+run:
+  deadline: 2m
+  issues-exit-code: 1
+  tests: true
+  skip-dirs:
+    - vendor$
+  skip-files:
+    - ".*\\.my\\.go$"
+    - lib/bad.go
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+
+# all available settings of specific linters
+linters-settings:
+  errcheck:
+    check-type-assertions: false
+    check-blank: false
+  govet:
+    check-shadowing: true
+    use-installed-packages: false
+  golint:
+    min-confidence: 0.8
+  gofmt:
+    simplify: true
+  gocyclo:
+    min-complexity: 10
+  maligned:
+    suggest-new: true
+  dupl:
+    threshold: 100
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+
+  misspell:
+    locale: US
+  lll:
+    line-length: 120
+    tab-width: 1
+  unused:
+    # treat code as a program (not a library) and report unused exported identifiers; default is false.
+    # XXX: if you enable this setting, unused will report a lot of false-positives in text editors:
+    # if it's called for subdir of a project it can't find funcs usages. All text editor integrations
+    # with golangci-lint call it on a directory with the changed file.
+    check-exported: false
+  unparam:
+    # call graph construction algorithm (cha, rta). In general, use cha for libraries,
+    # and rta for programs with main packages. Default is cha.
+    algo: cha
+    check-exported: false
+  nakedret:
+    max-func-lines: 30
+
+linters:
+  enable:
+    - govet
+  enable-all: false
+  disable:
+    - megacheck
+    - maligned
+    - prealloc
+  disable-all: false
+  presets:
+    - bugs
+    - unused
+  fast: false
+
+issues:
+  exclude:
+    - .+\\.pb\\.go"
+    - .+\\.pb\\.gw\\.go,
+    - G304
+    - could not import github.com/davecgh/go-spew/spew
+    - cannot.*github.com/pmezard/go-difflib/difflib
+    - could not import golang.org/x/sys/unix
+    - could not import golang.org/x/crypto/ssh/terminal
+    - could not import github.com/spf13/pflag
+  exclude-use-default: false

@@ -2,6 +2,8 @@ package model
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 const (
@@ -9,6 +11,7 @@ const (
 )
 
 func TestGatewayMarshall(t *testing.T) {
-	err := LoadGateway(ValidGatewayPath)
-	assert.AssertNotNil(err)
+	gateway, err := LoadGateway(ValidGatewayPath)
+	assert.NotNil(t, gateway)
+	assert.Nil(t, err)
 }

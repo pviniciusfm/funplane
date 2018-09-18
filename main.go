@@ -3,45 +3,12 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
-	"time"
 
-	"strconv"
-
-	"github.com/gogo/protobuf/types"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
 var (
-	// role             model.Proxy
-	// registry         serviceregistry.ServiceRegistry
-	statusPort       uint16
-	applicationPorts []string
-
-	// proxy config flags (named identically)
-	configPath               string
-	binaryPath               string
-	serviceCluster           string
-	availabilityZone         string
-	drainDuration            time.Duration
-	parentShutdownDuration   time.Duration
-	discoveryAddress         string
-	discoveryRefreshDelay    time.Duration
-	zipkinAddress            string
-	connectTimeout           time.Duration
-	statsdUDPAddress         string
-	proxyAdminPort           uint16
-	controlPlaneAuthPolicy   string
-	customConfigFile         string
-	proxyLogLevel            string
-	concurrency              int
-	bootstrapv2              bool
-	templateFile             string
-	disableInternalTelemetry bool
-
-	// loggingOptions = log.DefaultOptions()
-
 	rootCmd = &cobra.Command{
 		Use:   "fanplane",
 		Short: "Fanplane agent.",
@@ -53,28 +20,28 @@ var (
 	}
 )
 
-func parseApplicationPorts() ([]uint16, error) {
-	parsedPorts := make([]uint16, len(applicationPorts))
-	for _, port := range applicationPorts {
-		port := strings.TrimSpace(port)
-		if len(port) > 0 {
-			parsedPort, err := strconv.ParseUint(port, 10, 16)
-			if err != nil {
-				return nil, err
-			}
-			parsedPorts = append(parsedPorts, uint16(parsedPort))
-		}
-	}
-	return parsedPorts, nil
-}
+// func parseApplicationPorts() ([]uint16, error) {
+// 	parsedPorts := make([]uint16, len(applicationPorts))
+// 	for _, port := range applicationPorts {
+// 		port := strings.TrimSpace(port)
+// 		if len(port) > 0 {
+// 			parsedPort, err := strconv.ParseUint(port, 10, 16)
+// 			if err != nil {
+// 				return nil, err
+// 			}
+// 			parsedPorts = append(parsedPorts, uint16(parsedPort))
+// 		}
+// 	}
+// 	return parsedPorts, nil
+// }
 
-func timeDuration(dur *types.Duration) time.Duration {
-	out, err := types.DurationFromProto(dur)
-	if err != nil {
-		log.Warn(err)
-	}
-	return out
-}
+// func timeDuration(dur *types.Duration) time.Duration {
+// 	out, err := types.DurationFromProto(dur)
+// 	if err != nil {
+// 		log.Warn(err)
+// 	}
+// 	return out
+// }
 
 func init() {
 	// proxyCmd.PersistentFlags().StringVar((*string)(&registry), "serviceregistry",
