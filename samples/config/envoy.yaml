@@ -23,7 +23,7 @@ static_resources:
   - connect_timeout: 1s
     hosts:
     - socket_address:
-        address: 10.0.0.152
+        address: {{ fanplane.dns }}
         port_value: 18000
     http2_protocol_options: {}
     name: xds_cluster

@@ -67,16 +67,12 @@ linters:
   presets:
     - bugs
     - unused
-  fast: false
+  fast: true
 
 issues:
   exclude:
     - .+\\.pb\\.go"
     - .+\\.pb\\.gw\\.go,
     - G304
-    - could not import github.com/davecgh/go-spew/spew
     - cannot.*github.com/pmezard/go-difflib/difflib
-    - could not import golang.org/x/sys/unix
-    - could not import golang.org/x/crypto/ssh/terminal
-    - could not import github.com/spf13/pflag
   exclude-use-default: false

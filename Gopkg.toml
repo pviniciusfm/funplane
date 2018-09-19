@@ -1,0 +1,76 @@
+required = [
+  ### BEGIN spelling check deps
+  "github.com/client9/misspell",
+  ### END spelling check deps
+  ### BEGIN Mixer codegen deps
+  "github.com/istio/tools/protoc-gen-docs",
+  ### END Mixer codegen deps
+  # fortio is built in vendor for the testing framework
+  "fortio.org/fortio",
+]
+
+ignored = [
+  # Context Graph depends on a locally vendored library that isn't (yet) available upstream.
+  "istio.io/istio/mixer/adapter/stackdriver/contextgraph",
+]
+
+[[override]]
+  name = "github.com/docker/distribution"
+  branch = "master"
+
+[[override]]
+  name = "k8s.io/client-go"
+  branch = "release-7.0"	# For K8s 1.10.x
+
+[[constraint]]
+  name = "github.com/ghodss/yaml"
+  version = "1.0.0"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/hashicorp/go-multierror"
+
+[[constraint]]
+  name = "github.com/howeyc/fsnotify"
+  version = "0.9.0"
+
+[[constraint]]
+  name = "github.com/spf13/cobra"
+  version = "0.0.3"
+
+[[constraint]]
+  name = "github.com/stretchr/testify"
+  version = "1.2.1"
+
+[[constraint]]
+  branch = "v2"
+  name = "gopkg.in/validator.v2"
+
+[[constraint]]
+  name = "gopkg.in/yaml.v2"
+  version = "2.2.1"
+
+[[constraint]]
+  name = "k8s.io/apimachinery"
+  version = "kubernetes-1.10.4"
+
+[prune]
+  go-tests = true
+  unused-packages = true
+  non-go = true
+  [[prune.project]]
+    name = "github.com/client9/misspell"
+    non-go = false
+    unused-packages = false
+  [[prune.project]]
+    name = "github.com/gogo/googleapis"
+    non-go = false
+    unused-packages = false
+  [[prune.project]]
+    name = "github.com/gogo/protobuf"
+    non-go = false
+    unused-packages = false
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/campoy/jsonenums"

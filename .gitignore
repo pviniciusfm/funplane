@@ -1,3 +1,5 @@
 vendor/
 release/
 reports/
+.idea/
+*_jsonenums.go

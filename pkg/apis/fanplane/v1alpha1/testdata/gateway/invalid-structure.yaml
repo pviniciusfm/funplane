@@ -1,0 +1,14 @@
+apiVersion: networking.fanplane.io/v1alpha1
+kind: Gateway
+metadata:
+  name: falcon
+spec:
+  routes:
+  - match: /promotion/v1
+    route:
+      type: CONSUL_ERROR
+      service:
+        name: promotion
+        tag: master
+      rewrite:
+        uri: /promotion/v1/
