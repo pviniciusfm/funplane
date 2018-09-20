@@ -1,12 +1,13 @@
 version: 2
 jobs:
   build:
+    working_directory: /go/src/github.frg.tech/cloud/fanplane
     environment:
       http_proxy: http://proxy-dev.frg.tech:3128
       https_proxy: http://proxy-dev.frg.tech:3128
       no_proxy: "127.0.0.1,.frg.tech,.fanaticslabs.com"
     docker:
-      - image: dockercore/golang-cross:1.11.0
+      - image: golang:1.11
     steps:
       - checkout 
 
@@ -17,6 +18,7 @@ jobs:
       - run:
           name: Build
           command: |
+            go version
             mkdir -p /tmp/docker
             export PKG_VERSION="1.${CIRCLE_BUILD_NUM}"
             echo "${PKG_VERSION}" > /tmp/docker/.version
@@ -26,7 +28,7 @@ jobs:
 
       - run:
           name: Test
-          command: 
+          command: |
             make ci-test
 
       - store_test_results:

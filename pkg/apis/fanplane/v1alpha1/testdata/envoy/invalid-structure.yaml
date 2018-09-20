@@ -1,0 +1,20 @@
+apiVersion: networking.fanplane.io/v1alpha1
+kind: EnvoyBootstrap
+metadata:
+  name: falcon
+  tags:
+    version: v1
+spec:
+  admin:
+    access_log_path: /gateway/admin_access.log
+    address:
+      socket_address: { address: 127.0.0.1, port_value: 9001 }
+  static_resources:
+    clusters:
+    - name: service_cybersource
+      connect_timeout: 3s
+      type: LOGICAL_DNS
+      dns_lookup_family: V4_ONLY
+      lb_policy: ROUND_ROBIN2
+      hosts: [{ socket_address: { address: api.cybersource.com, port_value: 8443 }}]
+      tls_context: { sni: api.cybersource.com }

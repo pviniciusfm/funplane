@@ -1,10 +1,12 @@
-SHELL := /bin/bash
+ SHELL := /bin/bash
 .DEFAULT_GOAL := build
-export GO111MODULE := on
+export GO111MODULE := off
 PKG_VERSION ?= dev
 CIRCLE_SHA1 ?= $(shell git rev-parse HEAD)
 TEST_RESULTS ?= ${PWD}/reports
 BIN_DIR := $(GOPATH)/bin
+DEP := $(BIN_DIR)/dep
+VENDOR_DIR := ./vendor
 GOMETALINTER := $(shell which golangci-lint) 
 SOURCE_FILES ?= $(shell go list ./... | sed "s:^:$(GOPATH)/src/:")
 OS := $(shell uname -s)
@@ -14,12 +16,19 @@ LDFLAGS_REL := -ldflags="-s -w \
 	-X $(fanplane_path)/cmd.gitSha1=$(CIRCLE_SHA1)"
 PATH := ./bin:$(PATH)
 
+$(DEP):
+	@go get -v -u github.com/golang/dep/cmd/dep
+
+$(VENDOR_DIR): $(DEP)
+	@dep ensure -v
+
 .PHONY: ci-test
 ci-test: lint test ## Trigger tests ci cycle
 
 .PHONY: setup
-setup: ## Download tools required to check and build fanplane
+setup: $(DEP) ## Download tools required to check and build fanplane
 	go get github.com/jstemmer/go-junit-report
+	go get github.com/campoy/jsonenums
 ifeq ($(OS,,), Darwin)
 	brew install golangci-lint
 else
@@ -27,7 +36,8 @@ else
 endif
 
 .PHONY: build
-build: ## Download dependencies and compile project
+build: $(VENDOR_DIR) ## Download dependencies and compile project
+	@go generate ./...
 	@CGO_ENABLED=0 LDFLAGS="${LDFLAGS} -linkmode external -s" go build $(LDFLAGS_REL) -o fanplane main.go
 
 .PHONY: lint
@@ -37,7 +47,7 @@ lint: ## Runs go lint checks
 .PHONY: test
 test: ## Run unit tests and output coverage report
 	mkdir -p $(TEST_RESULTS)
-	go test -v -failfast -race -coverpkg=./... -covermode=atomic -coverprofile=coverage.out ./... | go-junit-report > test-results.xml
+	go test -v -failfast -race -coverpkg=./... -covermode=atomic -coverprofile=coverage.out ./... | go-junit-report -set-exit-code > test-results.xml
 	go tool cover -html=coverage.out -o coverage.html
 	mv test-results.xml coverage.out coverage.html ${TEST_RESULTS}
 

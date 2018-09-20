@@ -1,0 +1,36 @@
+apiVersion: networking.fanplane.io/v1alpha1
+kind: Gateway
+metadata:
+  name: falcon
+spec:
+  selector:
+    version: v1
+
+  listener:
+    port: 443
+    protocol: HTTPS
+
+  routes:
+  - type: CONSUL_DNS
+    match: /promotion/v1
+    service:
+      name: promotion
+      tag: master
+    rewrite:
+      uri: /promotion/v1/
+
+    trafficPolicy:
+      connectionPool:
+        httpMaxPendingRequests: 5
+        http2MaxRequests: 1000
+        maxRequestsPerConnection: 10
+        timeout: 5s
+
+      loadBalancer:
+        type: LEAST_CONN
+
+      retryPolicy:
+        retryOn: ["5xx"]
+        numRetries: 10
+        backoff: 500ms
+        maxBackoff: 5s

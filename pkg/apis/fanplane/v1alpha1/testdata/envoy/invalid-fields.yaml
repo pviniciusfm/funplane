@@ -1,0 +1,11 @@
+apiVersion: networking.fanplane.io/v1alpha1
+kind: EnvoyBootstrap
+metadata:
+  name: falcon
+  tags:
+    version: v1
+spec:
+  admin:
+    accesslogpath: /gateway/admin_access.log
+    address:
+      socketaddress: { address: 127.0.0.1, port_value: 9001 }

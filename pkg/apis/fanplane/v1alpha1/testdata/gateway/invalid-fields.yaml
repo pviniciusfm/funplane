@@ -1,0 +1,17 @@
+apiVersion: networking.fanplane.io/v1alpha1
+kind: Gateway
+metadata:
+  name: falcon
+spec:
+  listener:
+    port: 443
+    protocol: HTTPS
+
+  routes:
+  - type: CONSUL_ERROR
+    match: /promotion/v1
+    service:
+      name: promotion
+      tag: master
+    rewrite:
+      uri: /promotion/v1/

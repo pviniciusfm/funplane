@@ -1,0 +1,13 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata: fanplane
+  name: fanplane
+spec:
+  replicas: 1
+    spec:
+      containers:
+      - name: fanplane
+        image: "docker.repo.frg.tech/fanplane:latest"
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8000
