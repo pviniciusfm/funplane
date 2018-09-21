@@ -18,9 +18,9 @@ type FakeEnvoyBootstraps struct {
 	ns   string
 }
 
-var envoybootstrapsResource = schema.GroupVersionResource{Group: "fanplane.io", Version: "v1alpha1", Resource: "envoybootstraps"}
+var envoybootstrapsResource = schema.GroupVersionResource{Group: "network.fanplane.io", Version: "v1alpha1", Resource: "envoybootstraps"}
 
-var envoybootstrapsKind = schema.GroupVersionKind{Group: "fanplane.io", Version: "v1alpha1", Kind: "EnvoyBootstrap"}
+var envoybootstrapsKind = schema.GroupVersionKind{Group: "network.fanplane.io", Version: "v1alpha1", Kind: "EnvoyBootstrap"}
 
 // Get takes name of the envoyBootstrap, and returns the corresponding envoyBootstrap object, and an error if there is any.
 func (c *FakeEnvoyBootstraps) Get(name string, options v1.GetOptions) (result *v1alpha1.EnvoyBootstrap, err error) {

@@ -56,10 +56,9 @@ func checkGatewayModel(t *testing.T, table test.FixtureTable) {
 		assert.Equal(t, crd.Spec.Listener.Protocol, HTTPS)
 		assert.NotEmpty(t, crd.Spec.Routes)
 		assert.NotZero(t, crd.Spec.Routes[0].RouteType)
-		assert.NotEmpty(t, crd.Spec.Routes[0].TrafficPolicy)
-		assert.NotZero(t, crd.Spec.Routes[0].TrafficPolicy.LoadBalancerSettings.LoadBalancerType)
-		assert.NotEmpty(t, crd.Spec.Routes[0].TrafficPolicy.RetryPolicy)
-		assert.NotEmpty(t, crd.Spec.Routes[0].TrafficPolicy.ConnectionPoolSettings)
+		assert.NotZero(t, crd.Spec.Routes[0].LoadBalancerSettings.LoadBalancerType)
+		assert.NotEmpty(t, crd.Spec.Routes[0].RetryPolicy)
+		assert.NotEmpty(t, crd.Spec.Routes[0].ConnectionPoolSettings)
 		assert.NotEmpty(t, crd.Spec.Selector)
 	}
 }

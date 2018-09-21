@@ -13,7 +13,7 @@ import (
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// Gateway is a specification for an Gateway resource
+//Gateway is the highlevel CRD object that holds Gateway Specification object
 type Gateway struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -23,6 +23,7 @@ type Gateway struct {
 	Spec *GatewaySpec `json:"spec" validate:"nonzero"`
 }
 
+// GatewaySpec contains the definition of Envoy's Routes, Listeners and Clusters
 type GatewaySpec struct {
 	Selector map[string]string `json:"selector,omitempty"`
 	Hosts    []string          `json:"hosts"`
@@ -37,12 +38,20 @@ type GatewayStatus struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// GatewayList is a list of Gateway resources
+// GatewayList is a list of Gateway resources (Required for k8 crds)
 type GatewayList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata"`
 
 	Items []Gateway `json:"items"`
+}
+
+func (in *Gateway) GetSpec() interface{} {
+	return in.Spec
+}
+
+func (in *Gateway) GetSidecarSelector() string {
+	return in.Name
 }
 
 // LoadGateway reads configuration data from a YAML file

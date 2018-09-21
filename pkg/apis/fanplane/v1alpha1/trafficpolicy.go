@@ -18,13 +18,7 @@ type ConnectionPoolSettings struct {
 type RetryPolicy struct {
 	RetryOn    []string `json:"retryOn,omitempty"`
 	NumRetries int32    `json:"numRetries,omitempty"`
-	BackOff    Duration `json:"backOff,omitempty"`
+	PerTryTimeout    Duration `json:"perTryTimeout,omitempty"`
 	MaxBackOff Duration `json:"maxBackOff,omitempty"`
 }
 
-
-type TrafficPolicy struct {
-	LoadBalancerSettings   *LoadBalancerSettings   `json:"loadBalancer,omitempty"`
-	ConnectionPoolSettings *ConnectionPoolSettings `json:"connectionPool,omitempty"`
-	RetryPolicy            *RetryPolicy            `json:"retryPolicy,omitempty"`
-}

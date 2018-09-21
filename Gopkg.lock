@@ -21,6 +21,14 @@
   version = "v1.3.0"
 
 [[projects]]
+  branch = "master"
+  digest = "1:707ebe952a8b3d00b343c01536c79c73771d100f63ec6babeaed5c79e2b8a8dd"
+  name = "github.com/beorn7/perks"
+  packages = ["quantile"]
+  pruneopts = "NUT"
+  revision = "3a771d992973f24aa725d07868b467d1ddfceafb"
+
+[[projects]]
   digest = "1:a12c26510933c0af9fc828cce90aabb7e531d6014e97633b3cd452ad4763f64e"
   name = "github.com/client9/misspell"
   packages = ["."]
@@ -37,7 +45,7 @@
   version = "v1.1.1"
 
 [[projects]]
-  digest = "1:2d6d834d75ee45ad4ef9da88fd84fb56388f97196a64aa59cd7ba2d169b1d306"
+  digest = "1:8ad337562295e95e7d5072d6d8d17c314158b74a87497af13ecbb9b0f13e8586"
   name = "github.com/envoyproxy/go-control-plane"
   packages = [
     "envoy/api/v2",
@@ -48,11 +56,18 @@
     "envoy/api/v2/listener",
     "envoy/api/v2/route",
     "envoy/config/bootstrap/v2",
+    "envoy/config/filter/accesslog/v2",
+    "envoy/config/filter/network/http_connection_manager/v2",
     "envoy/config/metrics/v2",
     "envoy/config/overload/v2alpha",
     "envoy/config/ratelimit/v2",
     "envoy/config/trace/v2",
+    "envoy/service/discovery/v2",
     "envoy/type",
+    "pkg/cache",
+    "pkg/log",
+    "pkg/server",
+    "pkg/util",
   ]
   pruneopts = "NUT"
   revision = "676016db8193d83324a507a986a78cd3642ad713"
@@ -137,6 +152,38 @@
   version = "v0.2.0"
 
 [[projects]]
+  digest = "1:c01767916c59f084bb7c41a7d5877c0f3099b1595cfa066e84ec6ad6b084dd89"
+  name = "github.com/gorilla/context"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "08b5f424b9271eedf6f9f0ce86cb9396ed337a42"
+  version = "v1.1.1"
+
+[[projects]]
+  digest = "1:bf5cf1d53d703332e9bd8984c69784645b73a938317bf5ace9aadf20ac49379a"
+  name = "github.com/gorilla/mux"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "e3702bed27f0d39777b0b37b664b6280e8ef8fbf"
+  version = "v1.6.2"
+
+[[projects]]
+  digest = "1:f0d9d74edbd40fdeada436d5ac9cb5197407899af3fef85ff0137077ffe8ae19"
+  name = "github.com/hashicorp/errwrap"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "8a6fb523712970c966eefc6b39ed2c5e74880354"
+  version = "v1.0.0"
+
+[[projects]]
+  branch = "master"
+  digest = "1:2ed138049ab373f696db2081ca48f15c5abdf20893803612a284f2bdce2bf443"
+  name = "github.com/hashicorp/go-multierror"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "886a7fbe3eb1c874d46f623bfa70af45f425b3d1"
+
+[[projects]]
   digest = "1:b42cde0e1f3c816dd57f57f7bbcf05ca40263ad96f168714c130c611fc0856a6"
   name = "github.com/hashicorp/golang-lru"
   packages = [
@@ -180,6 +227,14 @@
   version = "v0.0.6"
 
 [[projects]]
+  digest = "1:5985ef4caf91ece5d54817c11ea25f182697534f8ae6521eadcd628c142ac4b6"
+  name = "github.com/matttproud/golang_protobuf_extensions"
+  packages = ["pbutil"]
+  pruneopts = "NUT"
+  revision = "c12348ce28de40eed0136aa2b644d0ee0650e56c"
+  version = "v1.0.1"
+
+[[projects]]
   digest = "1:2f42fa12d6911c7b7659738758631bec870b7e9b4c6be5444f963cdcfccc191f"
   name = "github.com/modern-go/concurrent"
   packages = ["."]
@@ -196,12 +251,61 @@
   version = "1.0.1"
 
 [[projects]]
+  digest = "1:80c34337e8a734e190f2d1b716cae774cca74db98315166f92074434e9af0227"
+  name = "github.com/natefinch/lumberjack"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "a96e63847dc3c67d17befa69c303767e2f84e54f"
+  version = "v2.1"
+
+[[projects]]
   digest = "1:0028cb19b2e4c3112225cd871870f2d9cf49b9b4276531f03438a88e94be86fe"
   name = "github.com/pmezard/go-difflib"
   packages = ["difflib"]
   pruneopts = "NUT"
   revision = "792786c7400a136282c1664665ae0a8db921c6c2"
   version = "v1.0.0"
+
+[[projects]]
+  digest = "1:70a01fee30baf21ff454a4beb0676c1bef47b7f6a1b846ee3e27c456d3f2e147"
+  name = "github.com/prometheus/client_golang"
+  packages = ["prometheus"]
+  pruneopts = "NUT"
+  revision = "967789050ba94deca04a5e84cce8ad472ce313c1"
+  version = "v0.9.0-pre1"
+
+[[projects]]
+  branch = "master"
+  digest = "1:2d5cd61daa5565187e1d96bae64dbbc6080dacf741448e9629c64fd93203b0d4"
+  name = "github.com/prometheus/client_model"
+  packages = ["go"]
+  pruneopts = "NUT"
+  revision = "5c3871d89910bfb32f5fcab2aa4b9ec68e65a99f"
+
+[[projects]]
+  branch = "master"
+  digest = "1:fad5a35eea6a1a33d6c8f949fbc146f24275ca809ece854248187683f52cc30b"
+  name = "github.com/prometheus/common"
+  packages = [
+    "expfmt",
+    "internal/bitbucket.org/ww/goautoneg",
+    "model",
+  ]
+  pruneopts = "NUT"
+  revision = "c7de2306084e37d54b8be01f3541a8464345e9a5"
+
+[[projects]]
+  branch = "master"
+  digest = "1:26a2f5e891cc4d2321f18a0caa84c8e788663c17bed6a487f3cbe2c4295292d0"
+  name = "github.com/prometheus/procfs"
+  packages = [
+    ".",
+    "internal/util",
+    "nfs",
+    "xfs",
+  ]
+  pruneopts = "NUT"
+  revision = "418d78d0b9a7b7de3a6bbc8a23def624cc977bb2"
 
 [[projects]]
   branch = "master"
@@ -242,6 +346,38 @@
   pruneopts = "NUT"
   revision = "f35b8ab0b5a2cef36673838d662e249dd9c94686"
   version = "v1.2.2"
+
+[[projects]]
+  digest = "1:22f696cee54865fb8e9ff91df7b633f6b8f22037a8015253c6b6a71ca82219c7"
+  name = "go.uber.org/atomic"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "1ea20fb1cbb1cc08cbd0d913a96dead89aa18289"
+  version = "v1.3.2"
+
+[[projects]]
+  digest = "1:58ca93bdf81bac106ded02226b5395a0595d5346cdc4caa8d9c1f3a5f8f9976e"
+  name = "go.uber.org/multierr"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "3c4937480c32f4c13a875a1829af76c98ca3d40a"
+  version = "v1.1.0"
+
+[[projects]]
+  digest = "1:cb65d15dcf60c2729636ea04b10d108c8dda94396669badaac88dd2d0f55e9c8"
+  name = "go.uber.org/zap"
+  packages = [
+    ".",
+    "buffer",
+    "internal/bufferpool",
+    "internal/color",
+    "internal/exit",
+    "zapcore",
+    "zapgrpc",
+  ]
+  pruneopts = "NUT"
+  revision = "ff33455a0e382e8a81d14dd7c922020b6b5e7982"
+  version = "v1.9.1"
 
 [[projects]]
   branch = "master"
@@ -390,6 +526,35 @@
 
 [[projects]]
   branch = "master"
+  digest = "1:a48845bb8c30117512c852a1c263a44c0ae54882d52c88ad980739dbad6eb638"
+  name = "istio.io/api"
+  packages = [
+    "authentication/v1alpha1",
+    "mesh/v1alpha1",
+    "mixer/v1",
+    "mixer/v1/config/client",
+    "networking/v1alpha3",
+    "rbac/v1alpha1",
+  ]
+  pruneopts = "NUT"
+  revision = "66290ace31792383b91143b3bb2e4c3d6b2285de"
+
+[[projects]]
+  branch = "master"
+  digest = "1:80e28f28e5d81d56a2941440c69e01a22555de918552c927af5a46e60ee929bc"
+  name = "istio.io/istio"
+  packages = [
+    "pilot/pkg/model",
+    "pilot/pkg/model/test",
+    "pilot/pkg/networking/util",
+    "pkg/cache",
+    "pkg/log",
+  ]
+  pruneopts = "NUT"
+  revision = "f67ffd7af2641157e6b8189b5cf7b746fe0105cb"
+
+[[projects]]
+  branch = "master"
   digest = "1:fa55210f71a6277eb328dd4df8779f97d6c337d70fab97f27594126ae27fd09a"
   name = "istio.io/tools"
   packages = ["pkg/protocgen"]
@@ -515,7 +680,14 @@
   input-imports = [
     "fortio.org/fortio",
     "github.com/client9/misspell",
+    "github.com/envoyproxy/go-control-plane/envoy/api/v2",
+    "github.com/envoyproxy/go-control-plane/envoy/api/v2/auth",
+    "github.com/envoyproxy/go-control-plane/envoy/api/v2/core",
+    "github.com/envoyproxy/go-control-plane/envoy/api/v2/listener",
+    "github.com/envoyproxy/go-control-plane/envoy/api/v2/route",
     "github.com/envoyproxy/go-control-plane/envoy/config/bootstrap/v2",
+    "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2",
+    "github.com/envoyproxy/go-control-plane/pkg/server",
     "github.com/ghodss/yaml",
     "github.com/gogo/protobuf/jsonpb",
     "github.com/gogo/protobuf/proto",
@@ -524,8 +696,10 @@
     "github.com/sirupsen/logrus",
     "github.com/spf13/cobra",
     "github.com/stretchr/testify/assert",
+    "google.golang.org/grpc",
     "gopkg.in/validator.v2",
     "gopkg.in/yaml.v2",
+    "istio.io/istio/pilot/pkg/networking/util",
     "k8s.io/apimachinery/pkg/api/errors",
     "k8s.io/apimachinery/pkg/apis/meta/v1",
     "k8s.io/apimachinery/pkg/labels",
