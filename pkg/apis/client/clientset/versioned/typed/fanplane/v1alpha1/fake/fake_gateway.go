@@ -18,9 +18,9 @@ type FakeGateways struct {
 	ns   string
 }
 
-var gatewaysResource = schema.GroupVersionResource{Group: "fanplane.io", Version: "v1alpha1", Resource: "gateways"}
+var gatewaysResource = schema.GroupVersionResource{Group: "network.fanplane.io", Version: "v1alpha1", Resource: "gateways"}
 
-var gatewaysKind = schema.GroupVersionKind{Group: "fanplane.io", Version: "v1alpha1", Kind: "Gateway"}
+var gatewaysKind = schema.GroupVersionKind{Group: "network.fanplane.io", Version: "v1alpha1", Kind: "Gateway"}
 
 // Get takes name of the gateway, and returns the corresponding gateway object, and an error if there is any.
 func (c *FakeGateways) Get(name string, options v1.GetOptions) (result *v1alpha1.Gateway, err error) {

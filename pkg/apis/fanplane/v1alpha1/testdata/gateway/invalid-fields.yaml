@@ -1,4 +1,4 @@
-apiVersion: networking.fanplane.io/v1alpha1
+apiVersion: network.fanplane.io/v1alpha1
 kind: Gateway
 metadata:
   name: falcon

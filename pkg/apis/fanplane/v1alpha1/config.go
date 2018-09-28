@@ -8,19 +8,14 @@ import (
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/gogo/protobuf/proto"
 	yaml2 "gopkg.in/yaml.v2"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"reflect"
 	"time"
 )
 
 // FanplaneObject is a k8s wrapper interface for config objects
 type FanplaneObject interface {
-	runtime.Object
-	GetSpec() map[string]interface{}
-	SetSpec(map[string]interface{})
-	GetObjectMeta() metav1.ObjectMeta
-	SetObjectMeta(metav1.ObjectMeta)
+	GetSidecarSelector() string
+	GetSpec() interface{}
 }
 
 
@@ -69,6 +64,31 @@ func ApplyYAML(yml string, pb proto.Message) error {
 	}
 
 	return jsonpb.UnmarshalString(string(js), pb)
+}
+
+// ToJSON marshals a proto to canonical JSON
+func ToJSON(msg proto.Message) (string, error) {
+	return ToJSONWithIndent(msg, "")
+}
+
+// ToJSONWithIndent marshals a proto to canonical JSON with pretty printed string
+func ToJSONWithIndent(msg proto.Message, indent string) (string, error) {
+	if msg == nil {
+		return "", errors.New("unexpected nil message")
+	}
+
+	// Marshal from proto to json bytes
+	m := jsonpb.Marshaler{Indent: indent}
+	return m.MarshalToString(msg)
+}
+
+func ToYAML(msg proto.Message) (string, error) {
+	js, err := ToJSON(msg)
+	if err != nil {
+		return "", err
+	}
+	yml, err := yaml.JSONToYAML([]byte(js))
+	return string(yml), err
 }
 
 // Duration is an abstract representation from time.Duration

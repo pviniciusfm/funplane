@@ -1,7 +1,7 @@
-apiVersion: networking.fanplane.io/v1alpha1
+apiVersion: network.fanplane.io/v1alpha1
 kind: Gateway
 metadata:
-  name: falcon
+  name: product-finding
 spec:
   routes:
   - match: /promotion/v1

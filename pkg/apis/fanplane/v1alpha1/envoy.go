@@ -29,6 +29,10 @@ type EnvoyBootstrapList struct {
 	Items []EnvoyBootstrap `json:"items"`
 }
 
+func (in *EnvoyBootstrap) GetSpec() interface{} {
+	return in.Spec
+}
+
 func (in *EnvoyBootstrap) DeepCopyInto(out *EnvoyBootstrap) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
@@ -49,3 +53,8 @@ func ParseEnvoyConfig(fanplaneObject interface{}) (config *envoy.Bootstrap, err 
 	config = protoRaw.(*envoy.Bootstrap)
 	return
 }
+
+func (in *EnvoyBootstrap) GetSidecarSelector() string {
+	return in.Name
+}
+
