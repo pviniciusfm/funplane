@@ -1,0 +1,18 @@
+apiVersion: network.fanplane.io/v1alpha1
+kind: Gateway
+metadata:
+  name: test-id
+spec:
+  listener:
+    port: 8800
+    protocol: HTTP
+
+  routes:
+  - type: DNS
+    host: "*"
+    prefix: /flex/v1/keys
+    dns:
+      fqdn: api.cybersource.com
+    retryPolicy:
+      numRetries: 2
+      perTryTimeout: 500ms
