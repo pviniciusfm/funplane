@@ -9,7 +9,7 @@ DEP := $(BIN_DIR)/dep
 VENDOR_DIR := ./vendor
 GOMETALINTER := $(shell which golangci-lint) 
 SOURCE_FILES ?= $(shell go list ./... | sed "s:^:$(GOPATH)/src/:")
-OS := $(shell uname -s)
+OS := linux
 fanplane_path := github.frg.tech/cloud/fanplane
 LDFLAGS_REL := -ldflags="-s -w \
 	-X $(fanplane_path)/cmd.version=$(PKG_VERSION) \
@@ -43,6 +43,12 @@ build: $(VENDOR_DIR) ## Download dependencies and compile project
 .PHONY: lint
 lint: ## Runs go lint checks
 	@golangci-lint run ./...
+
+.PHONY: e2e
+e2e: build ## Compiles docker and use kubectl apply to deploy latest dev fanplane
+	docker-compose build
+	docker-compose push
+	kubectl apply -f samples/kube
 
 .PHONY: test
 test: ## Run unit tests and output coverage report
