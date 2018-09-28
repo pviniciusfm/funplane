@@ -1,0 +1,56 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fanplane
+  labels:
+    istio-injection: disabled
+  annotations:
+    iam.amazonaws.com/allowed-roles: |
+      ["deny/*"]
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: fanplane
+  namespace: fanplane
+  labels:
+    app: fanplane
+spec:
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+      labels:
+        istio-injection: disabled
+        app: fanplane
+        release: dev
+    spec:
+      containers:
+      - name: fanplane
+        image: "docker.repo.frg.tech/fanplane:latest"
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 18000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fanplane
+  namespace: fanplane
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: tcp
+    dns.alpha.kubernetes.io/internal: fanplane.lab.frgcloud.com
+  labels:
+    app: fanplane
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 18000
+    targetPort: 18000
+    protocol: TCP
+    name: fanplane
+  selector:
+    app: fanplane
