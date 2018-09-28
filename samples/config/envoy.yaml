@@ -3,7 +3,7 @@ admin:
   access_log_path: /dev/null
   address:
     socket_address:
-      address: 0.0.0.0
+      address: 127.0.0.1
       port_value: 9000
 dynamic_resources:
   ads_config:
@@ -21,9 +21,10 @@ node:
 static_resources:
   clusters:
   - connect_timeout: 1s
+    type: STRICT_DNS
     hosts:
     - socket_address:
-        address: {{ fanplane.dns }}
+        address: localhost
         port_value: 18000
     http2_protocol_options: {}
     name: xds_cluster

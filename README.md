@@ -8,7 +8,10 @@ configuration and use xDS interface.
 Fanplane uses kubernetes CustomResourceDefinitions to ship
 envoy configuration into sidecars.
 
-[Controller Example](https://github.com/kubernetes/sample-controller/blob/master/docs/images/client-go-controller-interaction.jpeg)
+![Fanplane Flow](img/Fanplane.png)
+
+
+![Controller Example](https://github.com/kubernetes/sample-controller/raw/master/docs/images/client-go-controller-interaction.jpeg)
 
 ## Quick start
 ```
@@ -26,8 +29,8 @@ To generate go-client and deepcopy
 
 ## Roadmap
 
-- Create envoy adapters
 - Create registry
 - Implement registry fetch
 - Implement stream
 - Improve tracing
+- Implement tls

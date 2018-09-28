@@ -1,12 +1,13 @@
 package kube
 
 import (
-	"fmt"
+	"github.com/sirupsen/logrus"
+	"github.frg.tech/cloud/fanplane/pkg/server"
 	"reflect"
 	"testing"
 	"time"
 
-	apps "k8s.io/api/apps/v1"
+	"github.com/envoyproxy/go-control-plane/pkg/cache"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -14,12 +15,12 @@ import (
 	kubeinformers "k8s.io/client-go/informers"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	core "k8s.io/client-go/testing"
-	"k8s.io/client-go/tools/cache"
+	kubeCache "k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 
-	samplecontroller "k8s.io/sample-controller/pkg/apis/samplecontroller/v1alpha1"
-	"k8s.io/sample-controller/pkg/client/clientset/versioned/fake"
-	informers "k8s.io/sample-controller/pkg/client/informers/externalversions"
+	"github.frg.tech/cloud/fanplane/pkg/apis/client/clientset/versioned/fake"
+	informers "github.frg.tech/cloud/fanplane/pkg/apis/client/informers/externalversions"
+	fanplanecontroller "github.frg.tech/cloud/fanplane/pkg/apis/fanplane/v1alpha1"
 )
 
 var (
@@ -32,12 +33,15 @@ type fixture struct {
 
 	client     *fake.Clientset
 	kubeclient *k8sfake.Clientset
+
 	// Objects to put in the store.
-	fooLister        []*samplecontroller.Foo
-	deploymentLister []*apps.Deployment
+	envoyBoostrapLister []*fanplanecontroller.EnvoyBootstrap
+	gatewayListener     []*fanplanecontroller.Gateway
+
 	// Actions expected to happen on the client.
 	kubeactions []core.Action
 	actions     []core.Action
+
 	// Objects from here preloaded into NewSimpleFake.
 	kubeobjects []runtime.Object
 	objects     []runtime.Object
@@ -51,17 +55,15 @@ func newFixture(t *testing.T) *fixture {
 	return f
 }
 
-func newFoo(name string, replicas *int32) *samplecontroller.Foo {
-	return &samplecontroller.Foo{
-		TypeMeta: metav1.TypeMeta{APIVersion: samplecontroller.SchemeGroupVersion.String()},
+func newEnvoyBootsrap(name string, replicas *int32) *fanplanecontroller.EnvoyBootstrap {
+
+	return &fanplanecontroller.EnvoyBootstrap{
+		TypeMeta: metav1.TypeMeta{APIVersion: fanplanecontroller.SchemeGroupVersion.String(), Kind: "EnvoyBootstrap"},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: metav1.NamespaceDefault,
 		},
-		Spec: samplecontroller.FooSpec{
-			DeploymentName: fmt.Sprintf("%s-deployment", name),
-			Replicas:       replicas,
-		},
+		//Spec: fanplanecontroller.EnvoyBootstrap{},
 	}
 }
 
@@ -72,33 +74,36 @@ func (f *fixture) newController() (*Controller, informers.SharedInformerFactory,
 	i := informers.NewSharedInformerFactory(f.client, noResyncPeriodFunc())
 	k8sI := kubeinformers.NewSharedInformerFactory(f.kubeclient, noResyncPeriodFunc())
 
-	c := NewController(f.kubeclient, f.client,
-		k8sI.Apps().V1().Deployments(), i.Samplecontroller().V1alpha1().Foos())
+	snapCache := cache.NewSnapshotCache(true, server.Hasher{}, logrus.StandardLogger())
 
-	c.foosSynced = alwaysReady
+	c := NewController(snapCache, f.client,
+		i.Fanplane().V1alpha1().Gateways(),
+		i.Fanplane().V1alpha1().EnvoyBootstraps())
+
+	c.envoySynced = alwaysReady
 	c.deploymentsSynced = alwaysReady
 	c.recorder = &record.FakeRecorder{}
 
-	for _, f := range f.fooLister {
-		i.Samplecontroller().V1alpha1().Foos().Informer().GetIndexer().Add(f)
+	for _, f := range f.envoyBoostrapLister {
+		i.Fanplane().V1alpha1().EnvoyBootstraps().Informer().GetIndexer().Add(f)
 	}
 
-	for _, d := range f.deploymentLister {
-		k8sI.Apps().V1().Deployments().Informer().GetIndexer().Add(d)
+	for _, g := range f.gatewayListener {
+		i.Fanplane().V1alpha1().Gateways().Informer().GetIndexer().Add(g)
 	}
 
 	return c, i, k8sI
 }
 
-func (f *fixture) run(fooName string) {
-	f.runController(fooName, true, false)
+func (f *fixture) run(envoyBootstrapName string) {
+	f.runController(envoyBootstrapName, true, false)
 }
 
-func (f *fixture) runExpectError(fooName string) {
-	f.runController(fooName, true, true)
+func (f *fixture) runExpectError(envoyBootstrapName string) {
+	f.runController(envoyBootstrapName, true, true)
 }
 
-func (f *fixture) runController(fooName string, startInformers bool, expectError bool) {
+func (f *fixture) runController(envoyName string, startInformers bool, expectError bool) {
 	c, i, k8sI := f.newController()
 	if startInformers {
 		stopCh := make(chan struct{})
@@ -107,7 +112,7 @@ func (f *fixture) runController(fooName string, startInformers bool, expectError
 		k8sI.Start(stopCh)
 	}
 
-	err := c.syncHandler(fooName)
+	err := c.syncHandlerEnvoyBootstrap(envoyName)
 	if !expectError && err != nil {
 		f.t.Errorf("error syncing foo: %v", err)
 	} else if expectError && err == nil {
@@ -196,10 +201,10 @@ func filterInformerActions(actions []core.Action) []core.Action {
 	ret := []core.Action{}
 	for _, action := range actions {
 		if len(action.GetNamespace()) == 0 &&
-			(action.Matches("list", "foos") ||
-				action.Matches("watch", "foos") ||
-				action.Matches("list", "deployments") ||
-				action.Matches("watch", "deployments")) {
+			(action.Matches("list", "envoybootstraps") ||
+				action.Matches("watch", "envoybootstraps") ||
+				action.Matches("list", "gateways") ||
+				action.Matches("watch", "gateways")) {
 			continue
 		}
 		ret = append(ret, action)
@@ -208,23 +213,13 @@ func filterInformerActions(actions []core.Action) []core.Action {
 	return ret
 }
 
-func (f *fixture) expectCreateDeploymentAction(d *apps.Deployment) {
-	f.kubeactions = append(f.kubeactions, core.NewCreateAction(schema.GroupVersionResource{Resource: "deployments"}, d.Namespace, d))
-}
-
-func (f *fixture) expectUpdateDeploymentAction(d *apps.Deployment) {
-	f.kubeactions = append(f.kubeactions, core.NewUpdateAction(schema.GroupVersionResource{Resource: "deployments"}, d.Namespace, d))
-}
-
-func (f *fixture) expectUpdateFooStatusAction(foo *samplecontroller.Foo) {
-	action := core.NewUpdateAction(schema.GroupVersionResource{Resource: "foos"}, foo.Namespace, foo)
-	// TODO: Until #38113 is merged, we can't use Subresource
-	//action.Subresource = "status"
+func (f *fixture) expectUpdateFooStatusAction(envoybootstraps *fanplanecontroller.EnvoyBootstrap) {
+	action := core.NewUpdateAction(schema.GroupVersionResource{Resource: "envoybootstraps"}, envoybootstraps.Namespace, envoybootstraps)
 	f.actions = append(f.actions, action)
 }
 
-func getKey(foo *samplecontroller.Foo, t *testing.T) string {
-	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(foo)
+func getKey(foo *fanplanecontroller.EnvoyBootstrap, t *testing.T) string {
+	key, err := kubeCache.DeletionHandlingMetaNamespaceKeyFunc(foo)
 	if err != nil {
 		t.Errorf("Unexpected error getting key for foo %v: %v", foo.Name, err)
 		return ""
@@ -232,29 +227,24 @@ func getKey(foo *samplecontroller.Foo, t *testing.T) string {
 	return key
 }
 
-func TestCreatesDeployment(t *testing.T) {
+func TestCreatesEnvoyBootstrap(t *testing.T) {
 	f := newFixture(t)
-	foo := newFoo("test", int32Ptr(1))
+	envoyBootstrap := newEnvoyBootsrap("test", int32Ptr(1))
 
-	f.fooLister = append(f.fooLister, foo)
-	f.objects = append(f.objects, foo)
+	f.envoyBoostrapLister = append(f.envoyBoostrapLister, envoyBootstrap)
+	f.objects = append(f.objects, envoyBootstrap)
 
-	expDeployment := newDeployment(foo)
-	f.expectCreateDeploymentAction(expDeployment)
-	f.expectUpdateFooStatusAction(foo)
+	f.expectUpdateFooStatusAction(envoyBootstrap)
 
-	f.run(getKey(foo, t))
+	f.run(getKey(envoyBootstrap, t))
 }
 
 func TestDoNothing(t *testing.T) {
 	f := newFixture(t)
-	foo := newFoo("test", int32Ptr(1))
-	d := newDeployment(foo)
+	foo := newEnvoyBootsrap("test", int32Ptr(1))
 
-	f.fooLister = append(f.fooLister, foo)
+	f.envoyBoostrapLister = append(f.envoyBoostrapLister, foo)
 	f.objects = append(f.objects, foo)
-	f.deploymentLister = append(f.deploymentLister, d)
-	f.kubeobjects = append(f.kubeobjects, d)
 
 	f.expectUpdateFooStatusAction(foo)
 	f.run(getKey(foo, t))
@@ -262,36 +252,13 @@ func TestDoNothing(t *testing.T) {
 
 func TestUpdateDeployment(t *testing.T) {
 	f := newFixture(t)
-	foo := newFoo("test", int32Ptr(1))
-	d := newDeployment(foo)
+	envoyBootstrap := newEnvoyBootsrap("test", int32Ptr(1))
 
-	// Update replicas
-	foo.Spec.Replicas = int32Ptr(2)
-	expDeployment := newDeployment(foo)
+	f.envoyBoostrapLister = append(f.envoyBoostrapLister, envoyBootstrap)
+	f.objects = append(f.objects, envoyBootstrap)
 
-	f.fooLister = append(f.fooLister, foo)
-	f.objects = append(f.objects, foo)
-	f.deploymentLister = append(f.deploymentLister, d)
-	f.kubeobjects = append(f.kubeobjects, d)
-
-	f.expectUpdateFooStatusAction(foo)
-	f.expectUpdateDeploymentAction(expDeployment)
-	f.run(getKey(foo, t))
-}
-
-func TestNotControlledByUs(t *testing.T) {
-	f := newFixture(t)
-	foo := newFoo("test", int32Ptr(1))
-	d := newDeployment(foo)
-
-	d.ObjectMeta.OwnerReferences = []metav1.OwnerReference{}
-
-	f.fooLister = append(f.fooLister, foo)
-	f.objects = append(f.objects, foo)
-	f.deploymentLister = append(f.deploymentLister, d)
-	f.kubeobjects = append(f.kubeobjects, d)
-
-	f.runExpectError(getKey(foo, t))
+	f.expectUpdateFooStatusAction(envoyBootstrap)
+	f.run(getKey(envoyBootstrap, t))
 }
 
 func int32Ptr(i int32) *int32 { return &i }
