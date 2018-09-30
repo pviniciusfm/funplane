@@ -44,7 +44,6 @@ func checkGatewayModel(t *testing.T, table test.FixtureTable) {
 	// Given: An gateway configuration file
 	// When: LoadGateway
 	crd, err := LoadGateway(table.InputFile)
-
 	if table.ConversionResult == test.Fail {
 		//If invalid conversion should have expected output message
 		assert.EqualError(t, err, table.ExpectedOutputMessage)
@@ -56,9 +55,8 @@ func checkGatewayModel(t *testing.T, table test.FixtureTable) {
 		assert.Equal(t, crd.Spec.Listener.Protocol, HTTPS)
 		assert.NotEmpty(t, crd.Spec.Routes)
 		assert.NotZero(t, crd.Spec.Routes[0].RouteType)
-		assert.NotZero(t, crd.Spec.Routes[0].LoadBalancerSettings.LoadBalancerType)
+		assert.NotNil(t, crd.Spec.Routes[0].LoadBalancerSettings)
 		assert.NotEmpty(t, crd.Spec.Routes[0].RetryPolicy)
 		assert.NotEmpty(t, crd.Spec.Routes[0].ConnectionPoolSettings)
-		assert.NotEmpty(t, crd.Spec.Selector)
 	}
 }

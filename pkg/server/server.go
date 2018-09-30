@@ -5,9 +5,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	"github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
-	"github.com/envoyproxy/go-control-plane/pkg/cache"
 	xds "github.com/envoyproxy/go-control-plane/pkg/server"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -32,22 +30,11 @@ const (
 type Server struct {
 	xDSserver  xds.Server
 	Config     *FanplaneConfig
-	Cache      cache.SnapshotCache
+	Cache      Cache
 	Context    context.Context
 	callback   *Callback
 	startFuncs []func(<-chan struct{}) (error)
 	grpcServer *grpc.Server
-}
-
-// Hasher returns node ID as an ID
-type Hasher struct{}
-
-// ID function
-func (h Hasher) ID(node *core.Node) string {
-	if node == nil {
-		return "unknown"
-	}
-	return node.Id
 }
 
 const grpcMaxConcurrentStreams = 1000000
@@ -55,7 +42,7 @@ const grpcMaxConcurrentStreams = 1000000
 // RunServer runs gRPC service to publish ADS service
 // RunManagementServer starts an xDS server at the given port.
 func NewManagementServer(ctx context.Context, config *FanplaneConfig) (server *Server, err error) {
-	cache := cache.NewSnapshotCache(config.ADSMode, Hasher{}, log.StandardLogger())
+	cache := NewCache()
 	cb := &Callback{}
 	xdsServer := xds.NewServer(cache, cb)
 

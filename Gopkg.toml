@@ -12,6 +12,7 @@ required = [
 ignored = [
   # Context Graph depends on a locally vendored library that isn't (yet) available upstream.
   "istio.io/istio/mixer/adapter/stackdriver/contextgraph",
+  "github.com/campoy/jsonenums"
 ]
 
 [[override]]
@@ -70,10 +71,6 @@ ignored = [
     name = "github.com/gogo/protobuf"
     non-go = false
     unused-packages = false
-
-[[constraint]]
-  branch = "master"
-  name = "github.com/campoy/jsonenums"
 
 [[constraint]]
   name = "github.com/spf13/viper"

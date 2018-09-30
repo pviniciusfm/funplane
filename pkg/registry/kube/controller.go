@@ -2,9 +2,7 @@ package kube
 
 import (
 	"fmt"
-	"github.com/envoyproxy/go-control-plane/pkg/cache"
-	"github.frg.tech/cloud/fanplane/pkg/adapter"
-	"sync/atomic"
+	"github.frg.tech/cloud/fanplane/pkg/server"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -45,7 +43,7 @@ const (
 // Controller is the controller implementation for Fanplane resources
 type Controller struct {
 	//cache is the go-control-plane cache used to hydrate envoy sidecars
-	cache cache.SnapshotCache
+	cache server.Cache
 
 	//version is an atomic uint32 used to generate unique version identifiers for snapCache
 	version uint32
@@ -78,7 +76,7 @@ type Controller struct {
 
 // NewController returns a new Fanplane crd controller
 func NewController(
-	snapCache cache.SnapshotCache,
+	snapCache server.Cache,
 	fanplaneClientSet clientset.Interface,
 	gatewayInformer informers.GatewayInformer,
 	envoyBootstrapInformer informers.EnvoyBootstrapInformer) *Controller {
@@ -306,13 +304,11 @@ func (c *Controller) syncHandlerEnvoyBootstrap(key string) error {
 
 		return err
 	}
-	atomic.AddUint32(&c.version, 1)
-	envoyAdapter := adapter.EnvoyBootstrapAdapter{}
-	adapter.AddCachedResources(envoyAdapter, envoyBootstrap, fmt.Sprint(c.version), c.cache)
 
 	// If an error occurs during Get/Create, we'll requeue the item so we can
 	// attempt processing again later. This could have been caused by a
 	// temporary network failure, or any other transient reason.
+	err = c.cache.Add(envoyBootstrap)
 	if err != nil {
 		return err
 	}
@@ -353,9 +349,8 @@ func (c *Controller) syncHandlerGateway(key string) error {
 
 		return err
 	}
-	atomic.AddUint32(&c.version, 1)
-	gatewayAdapter := adapter.GatewayAdapter{}
-	adapter.AddCachedResources(gatewayAdapter, gateway, fmt.Sprint(c.version), c.cache)
+
+	err = c.cache.Add(gateway)
 
 	// If an error occurs during Get/Create, we'll requeue the item so we can
 	// attempt processing again later. This could have been caused by a

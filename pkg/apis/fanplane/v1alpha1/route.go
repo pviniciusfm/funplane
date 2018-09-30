@@ -49,17 +49,6 @@ func (in *ConsulServiceEntry) GetClusterId() string {
 	return fmt.Sprintf("%s|%s", in.Name, in.Tag)
 }
 
-//String returns string representation of RouteType
-func (r RouteType) String() string {
-	out := UnknownRouteType
-
-	if _, val := _RouteTypeValueToName[r]; val {
-		out = _RouteTypeValueToName[r]
-	}
-
-	return out
-}
-
 //DNSRoute is used to represent a Logical DNS Route Type Entry
 type DNSRoute struct {
 	id      string  `json:id,omitempty`

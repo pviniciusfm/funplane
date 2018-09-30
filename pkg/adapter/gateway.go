@@ -25,8 +25,12 @@ const (
 	DefaultRouteConfigName = "local_route"
 )
 
-type GatewayAdapter struct {
-	Aggregated
+type gatewayAdapter struct {
+	gateway *v1alpha1.Gateway
+}
+
+func (adapt *gatewayAdapter) GetFanplaneObject() v1alpha1.FanplaneObject {
+	return adapt.gateway
 }
 
 type ConversionType int
@@ -58,31 +62,49 @@ func init() {
 	ClusterConversionMap[v1alpha1.DNS] = buildDNSCluster
 }
 
-//GetListeners extract and adapts the single gateway listener in Gateway Fanplane to envoy object
-func (GatewayAdapter) GetListeners(object v1alpha1.FanplaneObject) ([]cache.Resource, error) {
-	gateway := object.(*v1alpha1.Gateway)
-	lis, err := buildListener(gateway)
+// NewGatewayAdapter factory method for adapter constructor
+func NewGatewayAdapter(obj v1alpha1.FanplaneObject) (Adapter) {
+	result := &gatewayAdapter{}
+	result.gateway = obj.(*v1alpha1.Gateway)
+	return result
+}
+
+//BuildListeners extract and adapts the single gateway listener in Gateway Fanplane to envoy object
+func (adapt *gatewayAdapter) BuildListeners() (result []cache.Resource, err error) {
+	manager, err := buildConnectionManager(adapt.gateway)
+	config, err := util.MessageToStruct(manager)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return []cache.Resource{lis}, nil
+	out := &envoy.Listener{
+		Name:    DefaultListenerName,
+		Address: BuildAddress(v1alpha1.LocalhostAddress, uint32(adapt.gateway.Spec.Listener.Port)),
+		FilterChains: []listener.FilterChain{{
+			Filters: []listener.Filter{{
+				Name:   util.HTTPConnectionManager,
+				Config: config,
+			}},
+		}},
+	}
+
+	return []cache.Resource{out}, nil
 }
 
-//GetRoutes is not implemented. Gateway supports only listeners and clusters from aggregated interface
-func (GatewayAdapter) GetRoutes(object v1alpha1.FanplaneObject) (result []cache.Resource, err error) {
+//BuildRoutes is not implemented. Gateway supports only listeners and clusters from aggregated interface
+func (gatewayAdapter) BuildRoutes() (result []cache.Resource, err error) {
 	return
 }
 
-//GetEndpoints is not implemented. Gateway supports only listeners and clusters from aggregated interface
-func (GatewayAdapter) GetEndpoints(object v1alpha1.FanplaneObject) (result []cache.Resource, err error) {
+//BuildEndpoints is not implemented. Gateway supports only listeners and clusters from aggregated interface
+func (gatewayAdapter) BuildEndpoints() (result []cache.Resource, err error) {
 	return
 }
 
-//GetClusters extract and adapts Gateway Fanplane endpoints to envoy object
-func (GatewayAdapter) GetClusters(object v1alpha1.FanplaneObject) (result []cache.Resource, err error) {
-	gateway := object.(*v1alpha1.Gateway)
+//BuildClusters extract and adapts Gateway Fanplane endpoints to envoy object
+func (adapt *gatewayAdapter) BuildClusters() (result []cache.Resource, err error) {
+	gateway := adapt.gateway
 	result = []cache.Resource{}
 
 	for _, route := range gateway.Spec.Routes {
@@ -91,30 +113,6 @@ func (GatewayAdapter) GetClusters(object v1alpha1.FanplaneObject) (result []cach
 			return nil, err
 		}
 		result = append(result, cluster)
-	}
-
-	return
-}
-
-//buildListener produces the required envoy listeners to support Fanplane highlevel Gateway object
-func buildListener(in *v1alpha1.Gateway) (out *envoy.Listener, err error) {
-
-	manager, err := buildConnectionManager(in)
-	config, err := util.MessageToStruct(manager)
-
-	if err != nil {
-		return nil, err
-	}
-
-	out = &envoy.Listener{
-		Name:    DefaultListenerName,
-		Address: BuildAddress(v1alpha1.LocalhostAddress, uint32(in.Spec.Listener.Port)),
-		FilterChains: []listener.FilterChain{{
-			Filters: []listener.Filter{{
-				Name:   util.HTTPConnectionManager,
-				Config: config,
-			}},
-		}},
 	}
 
 	return
@@ -234,7 +232,7 @@ func buildDNSRoute(in *v1alpha1.Route) (out *envoyRoute.Route, err error) {
 			Cluster: in.DNS.GetClusterId(),
 		},
 		HostRewriteSpecifier: &envoyRoute.RouteAction_AutoHostRewrite{
-			&types.BoolValue{Value: true},
+			AutoHostRewrite: &types.BoolValue{Value: true},
 		},
 	}
 

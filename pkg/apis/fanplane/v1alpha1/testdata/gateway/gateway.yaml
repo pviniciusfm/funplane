@@ -1,11 +1,8 @@
-apiVersion: networking.fanplane.io/v1alpha1
+apiVersion: network.fanplane.io/v1alpha1
 kind: Gateway
 metadata:
   name: falcon
 spec:
-  selector:
-    version: v1
-
   listener:
     port: 443
     protocol: HTTPS
@@ -23,6 +20,19 @@ spec:
     retryPolicy:
       numRetries: 2
       perTryTimeout: 1s
+    loadBalancer:
+      type: ROUND_ROBIN
+
+  - type: CONSUL_DNS
+    prefix: /graphql
+    service:
+      name: data-services
+      tag: rc
+    retryPolicy:
+      numRetries: 2
+      perTryTimeout: 1s
+    tlsContext:
+      sni: rc-data-services.dev.frgcloud.com
 
   - type: CONSUL_DNS
     prefix: /graphql
@@ -33,19 +43,10 @@ spec:
       numRetries: 2
       perTryTimeout: 1s
 
-  - type: CONSUL_DNS
-      prefix: /graphql
-      service:
-        name: data-services
-        tag: rc
-      retryPolicy:
-        numRetries: 2
-        perTryTimeout: 1s
-
   - type: DNS
-      prefix: /flex/v1/keys
-      dns:
-        fqdn: api.cybersource.com
-      retryPolicy:
-        numRetries: 2
-        perTryTimeout: 500ms
+    prefix: /flex/v1/keys
+    dns:
+      fqdn: api.cybersource.com
+    retryPolicy:
+      numRetries: 2
+      perTryTimeout: 500ms

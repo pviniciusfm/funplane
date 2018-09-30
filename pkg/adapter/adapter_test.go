@@ -2,33 +2,31 @@ package adapter
 
 import (
 	"github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	"github.com/ghodss/yaml"
 	"github.com/spf13/viper"
 	testAssert "github.com/stretchr/testify/assert"
 	"github.frg.tech/cloud/fanplane/pkg/apis/fanplane/v1alpha1"
-	"io/ioutil"
 	"testing"
 )
+
+func init() {
+	viper.Set("domain", "dev.frgcloud.com")
+}
 
 func TestConvertGateway(t *testing.T) {
 	assert := testAssert.New(t)
 	//Given: A valid gateway entity
-	viper.Set("domain", "dev.frgcloud.com")
-	adapter := &GatewayAdapter{}
-	crd := &v1alpha1.Gateway{}
-	inputFile := "testdata/gateway-conversion.yaml"
-	in, err := ioutil.ReadFile(inputFile)
+	crd, err := v1alpha1.LoadGateway("testdata/gateway-conversion.yaml")
 	if !assert.Nil(err) {
 		return
 	}
 
-	err = yaml.Unmarshal(in, crd)
-	if !assert.Nil(err) {
-		return
-	}
+	adapter := NewAdapter(crd)
 
 	//When: Convert listeners
-	listeners, err := adapter.GetListeners(crd)
+	listeners, err := adapter.BuildListeners()
+	if err != nil {
+		t.Fatalf("error converting gateway %s", err)
+	}
 
 	//Then: Should output valid Listeners and Clusters entities of envoy's domain
 	assert.NotNil(listeners)
@@ -38,7 +36,7 @@ func TestConvertGateway(t *testing.T) {
 	assert.NotZero(listener.Address.GetSocketAddress().Address)
 	assert.NotZero(listener.GetFilterChains()[0].Filters[0].Config)
 
-	clusters, err := adapter.GetClusters(crd)
+	clusters, err := adapter.BuildClusters()
 	if !assert.Nil(err) {
 		return
 	}
@@ -54,23 +52,19 @@ func TestConvertGateway(t *testing.T) {
 func TestConvertEnvoyBootstrap(t *testing.T) {
 	assert := testAssert.New(t)
 
-	//Given: A Fanplane EnvoyBootstrap object
-	adapter := &EnvoyBootstrapAdapter{}
-	crd := &v1alpha1.EnvoyBootstrap{}
-	inputFile := "testdata/bootstrap.yaml"
-
-	in, err := ioutil.ReadFile(inputFile)
+	//Given: A valid gateway entity
+	crd, err := v1alpha1.LoadEnvoyBootstrap("testdata/bootstrap.yaml")
 	if !assert.Nil(err) {
 		return
 	}
 
-	err = yaml.Unmarshal(in, crd)
-	if !assert.Nil(err) {
-		return
-	}
+	adapter := NewAdapter(crd)
 
 	//When: Convert listeners
-	listeners, err := adapter.GetListeners(crd)
+	listeners, err := adapter.BuildListeners()
+	if err != nil {
+		t.Fatalf("error converting gateway %s", err)
+	}
 
 	//Then: Should output valid envoy LDS response
 	assert.NotNil(listeners)
@@ -81,7 +75,10 @@ func TestConvertEnvoyBootstrap(t *testing.T) {
 	assert.NotZero(listener.GetFilterChains()[0].Filters[0].Config)
 
 	//When: Convert clusters
-	clusters, err := adapter.GetClusters(crd)
+	clusters, err := adapter.BuildClusters()
+	if err != nil {
+		t.Fatalf("error converting gateway %s", err)
+	}
 
 	//Then: Should output valid envoy CDS response
 	assert.NotEmpty(clusters)
