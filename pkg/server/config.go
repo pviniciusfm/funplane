@@ -1,24 +1,5 @@
 package server
 
-import "time"
-
-//FanplaneConfig is the object that holds all parameterized configuration of envoy control plane
-type FanplaneConfig struct {
-	Port                  int
-	IPAddress             string
-	ID                    string
-	Domain                string
-	AgentStatusPort       int
-	MasterURL             string
-	ConfigPath            string
-	DrainDuration         time.Duration
-	DiscoveryRefreshDelay time.Duration
-	StatsdUDPAddress      string
-	LogLevel              string
-	KubeCfgFile           string
-	ADSMode               bool
-}
-
 //StatsDConfig holds the configuration required to contact StatsD server
 type StatsDConfig struct {
 	appName              string

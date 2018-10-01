@@ -8,10 +8,13 @@ import (
 	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
 	xds "github.com/envoyproxy/go-control-plane/pkg/server"
 	log "github.com/sirupsen/logrus"
+	"github.frg.tech/cloud/fanplane/pkg/apis/fanplane"
+	"github.frg.tech/cloud/fanplane/pkg/cache"
 	"google.golang.org/grpc"
 	"net"
 	"os"
 	"os/signal"
+	"syscall"
 )
 
 const (
@@ -28,12 +31,12 @@ const (
 )
 
 type Server struct {
-	xDSserver  xds.Server
-	Config     *FanplaneConfig
-	Cache      Cache
-	Context    context.Context
-	callback   *Callback
-	startFuncs []func(<-chan struct{}) (error)
+	xDSserver   xds.Server
+	Config      *fanplane.Config
+	ServerCache cache.Cache
+	Context     context.Context
+	callback    *Callback
+	startFuncs  []func(<-chan struct{}) (error)
 	grpcServer *grpc.Server
 }
 
@@ -41,24 +44,24 @@ const grpcMaxConcurrentStreams = 1000000
 
 // RunServer runs gRPC service to publish ADS service
 // RunManagementServer starts an xDS server at the given port.
-func NewManagementServer(ctx context.Context, config *FanplaneConfig) (server *Server, err error) {
-	cache := NewCache()
+func NewManagementServer(ctx context.Context, config *fanplane.Config) (server *Server, err error) {
+	cache := cache.NewCache()
 	cb := &Callback{}
 	xdsServer := xds.NewServer(cache, cb)
 
 	//Register server modules
-	startFuncs := []func(<-chan struct{}) (error){server.HandleAbortSignal}
 	grpcServer := grpc.NewServer(grpc.MaxConcurrentStreams(grpcMaxConcurrentStreams))
 
 	server = &Server{
-		xdsServer,
-		config,
-		cache,
-		ctx,
-		cb,
-		startFuncs,
-		grpcServer,
+		xDSserver: xdsServer,
+		Config: config,
+		ServerCache: cache,
+		Context: ctx,
+		callback: cb,
+		grpcServer: grpcServer,
 	}
+
+	server.startFuncs = []func(<-chan struct{}) (error){server.HandleAbortSignal}
 
 	//Register services
 	discovery.RegisterAggregatedDiscoveryServiceServer(grpcServer, xdsServer)
@@ -75,11 +78,19 @@ func (srv *Server) HandleAbortSignal(stop <-chan struct{}) (err error) {
 	// graceful shutdown
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
+	signal.Notify(c, syscall.SIGTERM)
+
 	go func() {
-		for range c {
-			// sig is a ^C, handle it
-			log.Println("Shutting down gRPC server...")
+		<-stop
+		c <- os.Interrupt
+	}()
+
+	go func() {
+		<-c
+		log.Info("Shutting down management server...")
+		if srv.grpcServer != nil {
 			srv.grpcServer.GracefulStop()
+			srv.grpcServer.GetServiceInfo()
 		}
 	}()
 
@@ -88,7 +99,7 @@ func (srv *Server) HandleAbortSignal(stop <-chan struct{}) (err error) {
 
 //Start starts all components of the Fanplane discovery service on the port specified in FanplaneOptions
 //Serving can be canceled at any time by closing the provided stop channel.
-func (srv *Server) Start(stop <-chan struct{}) (err error) {
+func (srv *Server) Start(stop <-chan struct{}) (error) {
 	// Now start all of the components.
 	for _, fn := range srv.startFuncs {
 		if err := fn(stop); err != nil {
@@ -102,15 +113,9 @@ func (srv *Server) Start(stop <-chan struct{}) (err error) {
 		log.WithError(err).Fatal("failed to listen")
 	}
 
-	go func() {
-		<-stop
-		srv.grpcServer.GracefulStop()
-		log.Debugf("Fanplane server terminated: %v", err)
-	}()
-
 	if err = srv.grpcServer.Serve(lis); err != nil {
 		log.WithError(err).Fatal(err)
 	}
 
-	return
+	return err
 }

@@ -1,19 +1,16 @@
 package kube
 
 import (
-	"github.com/sirupsen/logrus"
-	"github.frg.tech/cloud/fanplane/pkg/server"
+	"fmt"
+	"github.frg.tech/cloud/fanplane/pkg/cache"
 	"reflect"
 	"testing"
 	"time"
 
-	"github.com/envoyproxy/go-control-plane/pkg/cache"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/diff"
-	kubeinformers "k8s.io/client-go/informers"
-	k8sfake "k8s.io/client-go/kubernetes/fake"
 	core "k8s.io/client-go/testing"
 	kubeCache "k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
@@ -32,7 +29,6 @@ type fixture struct {
 	t *testing.T
 
 	client     *fake.Clientset
-	kubeclient *k8sfake.Clientset
 
 	// Objects to put in the store.
 	envoyBoostrapLister []*fanplanecontroller.EnvoyBootstrap
@@ -63,36 +59,35 @@ func newEnvoyBootsrap(name string, replicas *int32) *fanplanecontroller.EnvoyBoo
 			Name:      name,
 			Namespace: metav1.NamespaceDefault,
 		},
-		//Spec: fanplanecontroller.EnvoyBootstrap{},
 	}
 }
 
-func (f *fixture) newController() (*Controller, informers.SharedInformerFactory, kubeinformers.SharedInformerFactory) {
+func (f *fixture) newController() (*Controller, informers.SharedInformerFactory) {
 	f.client = fake.NewSimpleClientset(f.objects...)
-	f.kubeclient = k8sfake.NewSimpleClientset(f.kubeobjects...)
 
 	i := informers.NewSharedInformerFactory(f.client, noResyncPeriodFunc())
-	k8sI := kubeinformers.NewSharedInformerFactory(f.kubeclient, noResyncPeriodFunc())
-
-	snapCache := cache.NewSnapshotCache(true, server.Hasher{}, logrus.StandardLogger())
+	snapCache := cache.NewCache()
 
 	c := NewController(snapCache, f.client,
 		i.Fanplane().V1alpha1().Gateways(),
 		i.Fanplane().V1alpha1().EnvoyBootstraps())
 
 	c.envoySynced = alwaysReady
-	c.deploymentsSynced = alwaysReady
+
 	c.recorder = &record.FakeRecorder{}
 
-	for _, f := range f.envoyBoostrapLister {
-		i.Fanplane().V1alpha1().EnvoyBootstraps().Informer().GetIndexer().Add(f)
+	for _, fanplaneObject := range f.envoyBoostrapLister {
+		i.Fanplane().V1alpha1().EnvoyBootstraps().Informer().GetIndexer().Add(fanplaneObject)
 	}
 
-	for _, g := range f.gatewayListener {
-		i.Fanplane().V1alpha1().Gateways().Informer().GetIndexer().Add(g)
+	for _, fanplaneObject := range f.gatewayListener {
+		i.Fanplane().V1alpha1().Gateways().Informer().GetIndexer().Add(fanplaneObject)
 	}
 
-	return c, i, k8sI
+	test, _, _ := i.Fanplane().V1alpha1().EnvoyBootstraps().Informer().GetIndexer().Get(f.envoyBoostrapLister[0])
+	fmt.Println(test)
+
+	return c, i
 }
 
 func (f *fixture) run(envoyBootstrapName string) {
@@ -104,19 +99,18 @@ func (f *fixture) runExpectError(envoyBootstrapName string) {
 }
 
 func (f *fixture) runController(envoyName string, startInformers bool, expectError bool) {
-	c, i, k8sI := f.newController()
+	controller, informerFactory := f.newController()
 	if startInformers {
 		stopCh := make(chan struct{})
 		defer close(stopCh)
-		i.Start(stopCh)
-		k8sI.Start(stopCh)
+		informerFactory.Start(stopCh)
 	}
 
-	err := c.syncHandlerEnvoyBootstrap(envoyName)
+	err := controller.syncHandlerEnvoyBootstrap(envoyName)
 	if !expectError && err != nil {
-		f.t.Errorf("error syncing foo: %v", err)
+		f.t.Errorf("error syncing EnvoyBootstrap: %v", err)
 	} else if expectError && err == nil {
-		f.t.Error("expected error syncing foo, got nil")
+		f.t.Error("expected error syncing EnvoyBootstrap, got nil")
 	}
 
 	actions := filterInformerActions(f.client.Actions())
@@ -134,20 +128,6 @@ func (f *fixture) runController(envoyName string, startInformers bool, expectErr
 		f.t.Errorf("%d additional expected actions:%+v", len(f.actions)-len(actions), f.actions[len(actions):])
 	}
 
-	k8sActions := filterInformerActions(f.kubeclient.Actions())
-	for i, action := range k8sActions {
-		if len(f.kubeactions) < i+1 {
-			f.t.Errorf("%d unexpected actions: %+v", len(k8sActions)-len(f.kubeactions), k8sActions[i:])
-			break
-		}
-
-		expectedAction := f.kubeactions[i]
-		checkAction(expectedAction, action, f.t)
-	}
-
-	if len(f.kubeactions) > len(k8sActions) {
-		f.t.Errorf("%d additional expected actions:%+v", len(f.kubeactions)-len(k8sActions), f.kubeactions[len(k8sActions):])
-	}
 }
 
 // checkAction verifies that expected and actual actions are equal and both have
@@ -213,15 +193,20 @@ func filterInformerActions(actions []core.Action) []core.Action {
 	return ret
 }
 
-func (f *fixture) expectUpdateFooStatusAction(envoybootstraps *fanplanecontroller.EnvoyBootstrap) {
+func (f *fixture) expectUpdateEnvoyBootstrapAction(envoybootstraps *fanplanecontroller.EnvoyBootstrap) {
 	action := core.NewUpdateAction(schema.GroupVersionResource{Resource: "envoybootstraps"}, envoybootstraps.Namespace, envoybootstraps)
 	f.actions = append(f.actions, action)
 }
 
-func getKey(foo *fanplanecontroller.EnvoyBootstrap, t *testing.T) string {
-	key, err := kubeCache.DeletionHandlingMetaNamespaceKeyFunc(foo)
+func (f *fixture) expectCreateEnvoyBootstrapAction(envoybootstraps *fanplanecontroller.EnvoyBootstrap) {
+	action := core.NewCreateAction(schema.GroupVersionResource{Resource: "envoybootstraps"}, envoybootstraps.Namespace, envoybootstraps)
+	f.actions = append(f.actions, action)
+}
+
+func getKey(envoyBootstrap *fanplanecontroller.EnvoyBootstrap, t *testing.T) string {
+	key, err := kubeCache.DeletionHandlingMetaNamespaceKeyFunc(envoyBootstrap)
 	if err != nil {
-		t.Errorf("Unexpected error getting key for foo %v: %v", foo.Name, err)
+		t.Errorf("Unexpected error getting key for EnvoyBootstrap %v: %v", envoyBootstrap.Name, err)
 		return ""
 	}
 	return key
@@ -229,35 +214,43 @@ func getKey(foo *fanplanecontroller.EnvoyBootstrap, t *testing.T) string {
 
 func TestCreatesEnvoyBootstrap(t *testing.T) {
 	f := newFixture(t)
-	envoyBootstrap := newEnvoyBootsrap("test", int32Ptr(1))
+	envoyBootstrap, err := fanplanecontroller.LoadEnvoyBootstrap("../testdata/envoy.yaml")
+	envoyBootstrap.Status.Processed = true
+	if err != nil {
+		t.Fatal("couldn't parse testdata")
+	}
 
 	f.envoyBoostrapLister = append(f.envoyBoostrapLister, envoyBootstrap)
 	f.objects = append(f.objects, envoyBootstrap)
 
-	f.expectUpdateFooStatusAction(envoyBootstrap)
+	f.expectUpdateEnvoyBootstrapAction(envoyBootstrap)
 
 	f.run(getKey(envoyBootstrap, t))
 }
 
 func TestDoNothing(t *testing.T) {
 	f := newFixture(t)
-	foo := newEnvoyBootsrap("test", int32Ptr(1))
+	envoyBootstrapInvalid := newEnvoyBootsrap("test", int32Ptr(1))
 
-	f.envoyBoostrapLister = append(f.envoyBoostrapLister, foo)
-	f.objects = append(f.objects, foo)
+	f.envoyBoostrapLister = append(f.envoyBoostrapLister, envoyBootstrapInvalid)
+	f.objects = append(f.objects, envoyBootstrapInvalid)
 
-	f.expectUpdateFooStatusAction(foo)
-	f.run(getKey(foo, t))
+	f.runExpectError(getKey(envoyBootstrapInvalid, t))
 }
 
 func TestUpdateDeployment(t *testing.T) {
 	f := newFixture(t)
-	envoyBootstrap := newEnvoyBootsrap("test", int32Ptr(1))
+	envoyBootstrap, err := fanplanecontroller.LoadEnvoyBootstrap("../testdata/envoy.yaml")
+	envoyBootstrap.Status.Processed = true
+	if err != nil {
+		t.Fatal("couldn't parse testdata")
+	}
 
 	f.envoyBoostrapLister = append(f.envoyBoostrapLister, envoyBootstrap)
 	f.objects = append(f.objects, envoyBootstrap)
 
-	f.expectUpdateFooStatusAction(envoyBootstrap)
+	f.expectUpdateEnvoyBootstrapAction(envoyBootstrap)
+
 	f.run(getKey(envoyBootstrap, t))
 }
 

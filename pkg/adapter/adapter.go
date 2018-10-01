@@ -3,16 +3,17 @@ package adapter
 
 import (
 	"github.com/envoyproxy/go-control-plane/pkg/cache"
+	"github.frg.tech/cloud/fanplane/pkg/apis/fanplane"
 	"github.frg.tech/cloud/fanplane/pkg/apis/fanplane/v1alpha1"
 )
 
 type Adapter interface {
-	GetFanplaneObject() v1alpha1.FanplaneObject
+	GetFanplaneObject() fanplane.Object
 	XdsResponseBuilder
 }
 
 //New adapter is a factory method to return the concrete adapter
-func NewAdapter(obj v1alpha1.FanplaneObject) Adapter {
+func NewAdapter(obj fanplane.Object) Adapter {
 	switch obj.GetObjectKind().GroupVersionKind().Kind {
 	case v1alpha1.EnvoyBootstrapType:
 		return NewEnvoyBootstrapAdapter(obj)

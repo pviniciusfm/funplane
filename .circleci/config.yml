@@ -30,6 +30,7 @@ jobs:
           name: Test
           command: |
             make ci-test
+          no_output_timout: 4m
 
       - store_test_results:
           path: reports

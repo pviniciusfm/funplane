@@ -6,20 +6,55 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"github.frg.tech/cloud/fanplane/pkg/apis/fanplane"
+	"github.frg.tech/cloud/fanplane/pkg/cache"
+	"github.frg.tech/cloud/fanplane/pkg/registry"
+	"github.frg.tech/cloud/fanplane/pkg/registry/filestore"
 	"github.frg.tech/cloud/fanplane/pkg/registry/kube"
 	"github.frg.tech/cloud/fanplane/pkg/server"
-	"time"
+	"os"
+	"runtime/debug"
 )
 
 var (
-	FanplaneCmd *cobra.Command         = &cobra.Command{}
-	config      *server.FanplaneConfig = &server.FanplaneConfig{
-		Port:     18000,
-		ADSMode:  true,
-		Domain:   "lab.frgcloud.com",
-		ID:       "fanplane",
-		LogLevel: "debug",
+	FanplaneCmd *cobra.Command = &cobra.Command{
+		Use:   "fanplane",
+		Short: "Fanplane agent.",
+		Long: `
+ _______           ______  _                    
+(_______)         (_____ \| |                   
+ _____ _____ ____  _____) ) | _____ ____  _____ 
+|  ___|____ |  _ \|  ____/| |(____ |  _ \| ___ |
+| |   / ___ | | | | |     | |/ ___ | | | | ____|
+|_|   \_____|_| |_|_|      \_)_____|_| |_|_____)
+
+Fanplane is a simple way to provide centralized configuration for envoy sidecars .
+
+Use --logLevel trace to increase log verbosity   
+
+Example of utilization:
+
+fanplane --domain dynamic.dev.frgcloud.com --port 18000 --logLevel trace
+`,
+		RunE: func(c *cobra.Command, args []string) (err error) {
+			initializeLog(config)
+			initializeServer(config)
+			return
+		},
 	}
+	//Those are the config defaults
+	config *fanplane.Config = &fanplane.Config{
+		Port:              18000,
+		IPAddress:         "0.0.0.0",
+		Domain:            "consul",
+		StatsdUDPAddress:  "127.0.0.1:8125",
+		LogLevel:          "debug",
+		KubeCfgFile:       "",
+		ADSMode:           true,
+		RegistryType:      "kube",
+		RegistryDirectory: "registry/",
+	}
+
 	gitSha1 string
 	version string
 )
@@ -30,58 +65,88 @@ func init() {
 
 	FanplaneCmd.Version = fmt.Sprintf("%s {GitSha1: %s}", version, gitSha1)
 
-	defaultDrainDuration, _ := time.ParseDuration("1s")
-	defaultDiscoveryRefreshDelay, _ := time.ParseDuration("1s")
-
-	config := &server.FanplaneConfig{}
-	FanplaneCmd.PersistentFlags().StringVar(&config.KubeCfgFile, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
-	FanplaneCmd.PersistentFlags().StringVar(&config.MasterURL, "master", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
-	FanplaneCmd.PersistentFlags().IntVar(&config.Port, "port", 18000, "Fanplane listen port")
-	FanplaneCmd.PersistentFlags().StringVar(&config.IPAddress, "ip", "0.0.0.0",
+	FanplaneCmd.Flags().StringVar(&config.KubeCfgFile, "kubeconfig", config.KubeCfgFile, "Path to a kubeconfig. Only required if out-of-cluster.")
+	FanplaneCmd.Flags().StringVar(&config.MasterURL, "master", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
+	FanplaneCmd.Flags().IntVar(&config.Port, "port", config.Port, "Fanplane listen port")
+	FanplaneCmd.Flags().StringVar(&config.IPAddress, "ip", config.IPAddress,
 		"Proxy IP address. If not provided uses ${INSTANCE_IP} environment variable.")
-	FanplaneCmd.PersistentFlags().StringVar(&config.ID, "id", "",
-		"Proxy unique ID. If not provided uses ${POD_NAME}.${POD_NAMESPACE} from environment variables")
-	FanplaneCmd.PersistentFlags().StringVar(&config.Domain, "domain", "",
+
+	FanplaneCmd.Flags().StringVar(&config.Domain, "domain", config.Domain,
 		"DNS domain suffix. Used for consul service discovery")
 
-	FanplaneCmd.PersistentFlags().StringVar(&config.ConfigPath, "configPath", config.ConfigPath,
-		"Path to the generated configuration file directory")
-	FanplaneCmd.PersistentFlags().DurationVar(&config.DrainDuration, "drainDuration", defaultDrainDuration,
-		"The time in seconds that Envoy will drain connections during a hot restart")
+	FanplaneCmd.Flags().StringVar(&config.RegistryType, "registryType", config.RegistryType,
+		fmt.Sprintf("which configuration registry will be used for the agent. Valid options %s", registry.AllRegistryTypes))
 
-	FanplaneCmd.PersistentFlags().DurationVar(&config.DiscoveryRefreshDelay, "discoveryRefreshDelay",
-		defaultDiscoveryRefreshDelay,
-		"Polling interval for service discovery (used by EDS, CDS, LDS, but not RDS)")
+	FanplaneCmd.Flags().StringVar(&config.RegistryDirectory, "fileRegistryPath", config.RegistryDirectory,
+		"Path to the generated configuration filestore directory")
 
-	FanplaneCmd.PersistentFlags().StringVar(&config.StatsdUDPAddress, "statsdUdpAddress", "localhost:8125",
+	FanplaneCmd.Flags().StringVar(&config.StatsdUDPAddress, "statsdUdpAddress", config.StatsdUDPAddress,
 		"IP Address and Port of a Statsd UDP listener (e.g. 10.75.241.127:9125)")
 
-	FanplaneCmd.PersistentFlags().StringVar(&config.LogLevel, "proxyLogLevel", "warn",
-		fmt.Sprintf("The log level used to start the Envoy proxy (choose from {%s, %s, %s, %s, %s, %s, %s})",
+	FanplaneCmd.Flags().StringVar(&config.LogLevel, "logLevel", config.LogLevel,
+		fmt.Sprintf("The log level used to start the Fanplane (choose from {%s, %s, %s, %s, %s, %s, %s})",
 			"trace", "debug", "info", "warn", "err", "critical", "off"))
-	FanplaneCmd = &cobra.Command{
-		Use:   "fanplane",
-		Short: "Fanplane agent.",
-		Long:  "Fanplane agent runs is a simple way to provide centralized configuration for envoy sidecars .",
-		RunE: func(c *cobra.Command, args []string) (err error) {
-			signal := make(chan struct{})
 
-			ctx := context.Background()
-			sv, err := server.NewManagementServer(ctx, config)
-			go kube.Initialize(config, sv.Cache)
+	viper.BindPFlag("domain", FanplaneCmd.Flags().Lookup("domain"))
+}
 
-			if err != nil {
-				log.WithError(err).Fatal("Server stopped abruptly")
-				return
-			}
-
-			err = sv.Start(signal)
-			if err != nil {
-				log.WithError(err).Fatal("Couldn't initialize server")
-			}
-
-			return
-		},
+//initializeRegistry starts config registry according with Fanplane configuration
+func initializeRegistry(config *fanplane.Config, cache cache.Cache) error {
+	registryType, err := registry.ParseRegistryType(config.RegistryType)
+	if err != nil {
+		log.WithError(err).Fatal("couldn't initialize registry.")
 	}
 
+	switch registryType {
+	case registry.FileRegistry:
+		registry, err := filestore.NewFileRegistry(config, cache)
+		if err != nil {
+			return err
+		}
+		go registry.StartWatch()
+		return nil
+	case registry.KubeRegistry:
+		kube.Initialize(config, cache)
+		return nil
+	}
+	return fmt.Errorf("registryType %q doesn not exist", registryType)
+}
+
+//initializeLog configures log level of the entire application
+func initializeLog(config *fanplane.Config) {
+	result, err := log.ParseLevel(config.LogLevel)
+
+	if err != nil {
+		log.Fatalf("couldn't find log level %s", config.LogLevel)
+	}
+
+	log.SetLevel(result)
+}
+
+//initializeServer initializes server and registry
+func initializeServer(config *fanplane.Config) {
+	signal := make(chan struct{})
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("fanplane internal error. %q", r)
+			log.Debug(string(debug.Stack()))
+			os.Exit(1)
+		}
+	}()
+
+	ctx := context.Background()
+	sv, err := server.NewManagementServer(ctx, config)
+	if err != nil {
+		log.WithError(err).Fatal("server stopped abruptly")
+	}
+
+	err = initializeRegistry(config, sv.ServerCache)
+	if err != nil {
+		log.WithError(err).Fatal("couldn't initialize registry", err)
+	}
+
+	sv.Start(signal)
+	if err != nil {
+		log.WithError(err).Fatal("server stopped abruptly")
+	}
 }

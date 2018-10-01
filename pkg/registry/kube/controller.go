@@ -2,7 +2,7 @@ package kube
 
 import (
 	"fmt"
-	"github.frg.tech/cloud/fanplane/pkg/server"
+	"github.frg.tech/cloud/fanplane/pkg/cache"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -13,12 +13,12 @@ import (
 	fanplane "github.frg.tech/cloud/fanplane/pkg/apis/fanplane/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	kubeCache "k8s.io/client-go/tools/cache"
-
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 )
@@ -43,7 +43,7 @@ const (
 // Controller is the controller implementation for Fanplane resources
 type Controller struct {
 	//cache is the go-control-plane cache used to hydrate envoy sidecars
-	cache server.Cache
+	cache cache.Cache
 
 	//version is an atomic uint32 used to generate unique version identifiers for snapCache
 	version uint32
@@ -76,7 +76,7 @@ type Controller struct {
 
 // NewController returns a new Fanplane crd controller
 func NewController(
-	snapCache server.Cache,
+	snapCache cache.Cache,
 	fanplaneClientSet clientset.Interface,
 	gatewayInformer informers.GatewayInformer,
 	envoyBootstrapInformer informers.EnvoyBootstrapInformer) *Controller {
@@ -113,6 +113,7 @@ func NewController(
 		UpdateFunc: func(old, new interface{}) {
 			controller.enqueueEnvoyBootstrapObj(new)
 		},
+		DeleteFunc: controller.removeConfigurationFromCache,
 	})
 
 	// Set up an event handler for when Gateway resources change
@@ -121,6 +122,7 @@ func NewController(
 		UpdateFunc: func(old, new interface{}) {
 			controller.enqueueGatewayObj(new)
 		},
+		DeleteFunc: controller.removeConfigurationFromCache,
 	})
 
 	return controller
@@ -291,7 +293,6 @@ func (c *Controller) syncHandlerEnvoyBootstrap(key string) error {
 		return nil
 	}
 
-	//TODO: Decide to get EnvoyBootstrap or Gateway here
 	// Get the EnvoyBootstrap resource with this namespace/name
 	envoyBootstrap, err := c.envoyBootstrapLister.EnvoyBootstraps(namespace).Get(name)
 	if err != nil {
@@ -309,6 +310,7 @@ func (c *Controller) syncHandlerEnvoyBootstrap(key string) error {
 	// attempt processing again later. This could have been caused by a
 	// temporary network failure, or any other transient reason.
 	err = c.cache.Add(envoyBootstrap)
+
 	if err != nil {
 		return err
 	}
@@ -323,8 +325,6 @@ func (c *Controller) syncHandlerEnvoyBootstrap(key string) error {
 	c.recorder.Event(envoyBootstrap, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
 	return nil
 }
-
-
 
 // syncHandlerEnvoyBootstrap compares the actual state with the desired, and attempts to
 // converge the two. It then updates the Status block of the EnvoyBootstrap resource
@@ -423,4 +423,15 @@ func (c *Controller) enqueueGatewayObj(obj interface{}) {
 		return
 	}
 	c.gatewayWorkqueue.AddRateLimited(key)
+}
+
+//removeConfigurationFromCache parses object header and removes it from server cache
+func (c *Controller) removeConfigurationFromCache(obj interface{}) {
+	var object metav1.Object
+	var ok bool
+	if object, ok = obj.(metav1.Object); ok {
+		c.cache.RemoveById(object.GetName())
+	} else {
+		log.Errorf("couldn't remove obj %s from cache", obj)
+	}
 }

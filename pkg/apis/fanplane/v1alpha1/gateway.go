@@ -2,7 +2,6 @@ package v1alpha1
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"gopkg.in/validator.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -23,8 +22,8 @@ type Gateway struct {
 	Spec *GatewaySpec `json:"spec" validate:"nonzero"`
 }
 
-func (in *Gateway) GetType() string {
-	return in.TypeMeta.Kind
+func (in *Gateway) GetTypeMeta() metav1.TypeMeta {
+	return in.TypeMeta
 }
 
 func (in *Gateway) GetSpec() interface{} {
@@ -61,26 +60,24 @@ type GatewayList struct {
 	Items []Gateway `json:"items"`
 }
 
-// LoadGateway reads configuration data from a YAML file
+// LoadGateway reads configuration data from a YAML filestore
 func LoadGateway(path string) (cfg *Gateway, err error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Couldn't reader %s file", path))
+		return nil, fmt.Errorf(MsgConvertError, path, "Gateway")
 	}
 	defer file.Close()
 
 	reader := bufio.NewReader(file)
 
 	cfg = &Gateway{}
-	decoder := yaml.NewYAMLOrJSONDecoder(reader, reader.Size())
-	err = decoder.Decode(cfg)
 
-	if err != nil {
+	decoder := yaml.NewYAMLOrJSONDecoder(reader, reader.Size())
+	if err := decoder.Decode(cfg) ;err != nil {
 		return nil, fmt.Errorf("parsing config: %s", err)
 	}
 
-	err = validator.Validate(cfg)
-	if err != nil {
+	if err := validator.Validate(cfg); err != nil {
 		return nil, fmt.Errorf("invalid config: %s", err)
 	}
 

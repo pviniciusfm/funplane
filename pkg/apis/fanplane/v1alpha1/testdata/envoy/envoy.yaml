@@ -1,4 +1,4 @@
-apiVersion: networking.fanplane.io/v1alpha1
+apiVersion: fanplane.io/v1alpha1
 kind: EnvoyBootstrap
 metadata:
   name: falcon

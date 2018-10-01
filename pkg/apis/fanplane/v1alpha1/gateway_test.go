@@ -41,7 +41,7 @@ func TestGatewayModel(t *testing.T) {
 }
 
 func checkGatewayModel(t *testing.T, table test.FixtureTable) {
-	// Given: An gateway configuration file
+	// Given: An gateway configuration filestore
 	// When: LoadGateway
 	crd, err := LoadGateway(table.InputFile)
 	if table.ConversionResult == test.Fail {

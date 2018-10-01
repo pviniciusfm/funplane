@@ -22,6 +22,10 @@ type EnvoyBootstrap struct {
 	Spec interface{} `json:"spec"`
 }
 
+func (in *EnvoyBootstrap) GetTypeMeta() metav1.TypeMeta {
+	return in.TypeMeta
+}
+
 func (in *EnvoyBootstrap) SetSpec(newSpec interface{}) {
 	in.Spec = newSpec
 }
@@ -71,28 +75,26 @@ func (in *EnvoyBootstrap) GetSidecarSelector() string {
 	return in.Name
 }
 
+//LoadEnvoyBootstrap returns EnvoyBootstrap fanplane object from an yaml file into
 func LoadEnvoyBootstrap(path string) (bootstrap *EnvoyBootstrap, err error) {
 	bootstrap = &EnvoyBootstrap{}
-	//Read bytes from file
+	//Read bytes from filestore
 	in, err := ioutil.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("couldn't load envoy from file %s. %s", path, err)
+		return nil, fmt.Errorf(MsgConvertError, path, "EnvoyBootstrap")
 	}
 
 	//Unmarshal type struct with envoy unparsed
-	err = yaml.Unmarshal(in, bootstrap)
-	if err != nil {
-		return nil, fmt.Errorf("couldn't load envoy from file %s. %s", path, err)
+	if err = yaml.Unmarshal(in, bootstrap); err != nil {
+		return nil, fmt.Errorf(MsgConvertError, path, "EnvoyBootstrap")
 	}
 
 	//Parse and validates proto message
 	envoyConfig, err := ParseEnvoyConfig(bootstrap.Spec)
 	if err != nil {
-		return nil, fmt.Errorf("couldn't load envoy from file %s. %s", path, err)
+		return nil, fmt.Errorf(MsgConvertError, path, "EnvoyBootstrap")
 	}
 
 	bootstrap.Spec = envoyConfig
-
 	return
 }
-

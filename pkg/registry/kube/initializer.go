@@ -2,14 +2,15 @@ package kube
 
 import (
 	log "github.com/sirupsen/logrus"
-	"github.frg.tech/cloud/fanplane/pkg/server"
+	"github.frg.tech/cloud/fanplane/pkg/apis/fanplane"
+	"github.frg.tech/cloud/fanplane/pkg/cache"
 	"k8s.io/client-go/tools/clientcmd"
 
 	clientset "github.frg.tech/cloud/fanplane/pkg/apis/client/clientset/versioned"
 	informers "github.frg.tech/cloud/fanplane/pkg/apis/client/informers/externalversions"
 )
 
-func Initialize(config *server.FanplaneConfig, snapCache server.Cache) {
+func Initialize(config *fanplane.Config, snapCache cache.Cache) {
 	// set up signals so we handle the first shutdown signal gracefully
 	stopCh := SetupSignalHandler()
 

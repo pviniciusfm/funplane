@@ -6,11 +6,3 @@ services:
     image: docker.repo.frg.tech/fanplane:${PKG_VERSION}
     ports:
     - "15001"
-
-  fanplane-docs:
-    build:
-      context: .
-      dockerfile: ./docs/Dockerfile
-    image: docker.repo.frg.tech/fanplane-docs:${PKG_VERSION}
-    ports:
-    - "8000"

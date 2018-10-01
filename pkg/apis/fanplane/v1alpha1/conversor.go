@@ -1,7 +1,6 @@
 package v1alpha1
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/ghodss/yaml"
@@ -75,44 +74,54 @@ func ToJSONWithIndent(msg proto.Message, indent string) (string, error) {
 	return m.MarshalToString(msg)
 }
 
-func ToYAML(msg proto.Message) (string, error) {
-	js, err := ToJSON(msg)
+//Transforms highlevel interface into concrete typeInstance
+func ToStruct(spec interface{}, typeInstance interface{} ) (error) {
+	rawSpec, err := yaml.Marshal(spec)
 	if err != nil {
-		return "", err
-	}
-	yml, err := yaml.JSONToYAML([]byte(js))
-	return string(yml), err
-}
-
-// Duration is an abstract representation from time.Duration
-// that is meant to support the serialization of time based strings
-type Duration struct {
-	time.Duration
-}
-
-// MarshalJSON represents Duration struct into JSON format
-func (d Duration) MarshalJSON() ([]byte, error) {
-	return json.Marshal(d.String())
-}
-
-// UnmarshalJSON converts Duration serialized format into time.Duration
-func (d *Duration) UnmarshalJSON(b []byte) error {
-	var v interface{}
-	if err := json.Unmarshal(b, &v); err != nil {
 		return err
 	}
-	switch value := v.(type) {
-	case float64:
-		d.Duration = time.Duration(value)
-		return nil
-	case string:
-		var err error
-		d.Duration, err = time.ParseDuration(value)
-		if err != nil {
-			return err
-		}
-		return nil
-	default:
-		return errors.New("invalid duration")
+
+	return yaml.Unmarshal(rawSpec, typeInstance)
+}
+
+// ReadableDuration is an abstract representation from time.Duration
+// that is meant to support the serialization of time based strings
+// ReadableDuration is a duration type that is serialized to JSON in human readable format.
+type ReadableDuration time.Duration
+
+func NewReadableDuration(dur time.Duration) *ReadableDuration {
+	d := ReadableDuration(dur)
+	return &d
+}
+
+func (d *ReadableDuration) String() string {
+	return d.Duration().String()
+}
+
+func (d *ReadableDuration) Duration() time.Duration {
+	if d == nil {
+		return time.Duration(0)
 	}
+	return time.Duration(*d)
+}
+
+func (d *ReadableDuration) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf(`"%s"`, d.Duration().String())), nil
+}
+
+func (d *ReadableDuration) UnmarshalJSON(raw []byte) error {
+	if d == nil {
+		return fmt.Errorf("cannot unmarshal to nil pointer")
+	}
+
+	str := string(raw)
+	if len(str) < 2 || str[0] != '"' || str[len(str)-1] != '"' {
+		return fmt.Errorf("must be enclosed with quotes: %s", str)
+	}
+	dur, err := time.ParseDuration(str[1 : len(str)-1])
+	if err != nil {
+		return err
+	}
+	*d = ReadableDuration(dur)
+	return nil
 }

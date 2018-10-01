@@ -8,28 +8,37 @@ import (
 	"github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/envoyproxy/go-control-plane/envoy/api/v2/listener"
 	envoyRoute "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
+	xdsfault "github.com/envoyproxy/go-control-plane/envoy/config/filter/fault/v2"
+	xdshttpfault "github.com/envoyproxy/go-control-plane/envoy/config/filter/http/fault/v2"
 	"github.com/envoyproxy/go-control-plane/envoy/config/filter/network/http_connection_manager/v2"
 	hcm "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/http_connection_manager/v2"
+	"github.com/envoyproxy/go-control-plane/envoy/type"
 	"github.com/envoyproxy/go-control-plane/pkg/cache"
 	"github.com/envoyproxy/go-control-plane/pkg/util"
 	"github.com/gogo/protobuf/types"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
+	"github.frg.tech/cloud/fanplane/pkg/apis/fanplane"
 	"github.frg.tech/cloud/fanplane/pkg/apis/fanplane/v1alpha1"
+	"gopkg.in/validator.v2"
+	"time"
 )
 
 const (
+	MsgNotSupported        = "%s is not supported in current version"
 	DefaultListenerName    = "listener_0"
 	DefaultStatPrefix      = "ingress_http"
 	DefaultVirtualHostName = "local_service"
 	DefaultRouteConfigName = "local_route"
+	DefaultConnectTimeout  = time.Second * 5
 )
 
 type gatewayAdapter struct {
 	gateway *v1alpha1.Gateway
 }
 
-func (adapt *gatewayAdapter) GetFanplaneObject() v1alpha1.FanplaneObject {
+func (adapt *gatewayAdapter) GetFanplaneObject() fanplane.Object {
 	return adapt.gateway
 }
 
@@ -42,39 +51,47 @@ const (
 	RDS
 )
 
-var (
-	ListenerConversionMap map[v1alpha1.RouteType]func(in *v1alpha1.Route) (*envoyRoute.Route, error)
-	ClusterConversionMap  map[v1alpha1.RouteType]func(in *v1alpha1.Route) (*envoy.Cluster, error)
-)
+var ClusterConversionMap map[v1alpha1.RouteType]func(in *v1alpha1.Route, out *envoy.Cluster) (error)
 
 func init() {
-	ListenerConversionMap = map[v1alpha1.RouteType]func(in *v1alpha1.Route) (*envoyRoute.Route, error){}
-	ClusterConversionMap = map[v1alpha1.RouteType]func(in *v1alpha1.Route) (*envoy.Cluster, error){}
-
-	//Route Conversion maps based on RouteType
-	ListenerConversionMap[v1alpha1.CONSUL_SDS] = buildConsulSDSRoute
-	ListenerConversionMap[v1alpha1.CONSUL_DNS] = buildConsulDNSRoute
-	ListenerConversionMap[v1alpha1.DNS] = buildDNSRoute
+	ClusterConversionMap = map[v1alpha1.RouteType]func(in *v1alpha1.Route, out *envoy.Cluster) (error){}
 
 	//Cluster Conversion maps based on RouteType
 	ClusterConversionMap[v1alpha1.CONSUL_SDS] = buildConsulSDSCluster
 	ClusterConversionMap[v1alpha1.CONSUL_DNS] = buildConsulDNSCluster
-	ClusterConversionMap[v1alpha1.DNS] = buildDNSCluster
+	ClusterConversionMap[v1alpha1.DNS] = buildRawDNSCluster
 }
 
 // NewGatewayAdapter factory method for adapter constructor
-func NewGatewayAdapter(obj v1alpha1.FanplaneObject) (Adapter) {
+func NewGatewayAdapter(obj fanplane.Object) (Adapter) {
 	result := &gatewayAdapter{}
-	result.gateway = obj.(*v1alpha1.Gateway)
+
+	if _, ok := obj.(*fanplane.Kind); ok {
+		result.gateway = &v1alpha1.Gateway{TypeMeta: obj.GetTypeMeta(), ObjectMeta: obj.GetObjectMeta()}
+	} else {
+		result.gateway = obj.(*v1alpha1.Gateway)
+	}
+
+	if _, ok := obj.GetSpec().(*v1alpha1.GatewaySpec); !ok {
+		spec := &v1alpha1.GatewaySpec{}
+		v1alpha1.ToStruct(obj.GetSpec(), spec)
+		result.gateway.Spec = spec
+	}
+
 	return result
 }
 
 //BuildListeners extract and adapts the single gateway listener in Gateway Fanplane to envoy object
 func (adapt *gatewayAdapter) BuildListeners() (result []cache.Resource, err error) {
 	manager, err := buildConnectionManager(adapt.gateway)
-	config, err := util.MessageToStruct(manager)
-
 	if err != nil {
+		log.Errorf("failed to build connection manager in %q gateway", adapt.gateway.Name)
+		return nil, err
+	}
+
+	config, err := util.MessageToStruct(manager)
+	if err != nil {
+		log.Errorf("failed to convert connection manager struct in %q gateway ", adapt.gateway.Name)
 		return nil, err
 	}
 
@@ -108,7 +125,7 @@ func (adapt *gatewayAdapter) BuildClusters() (result []cache.Resource, err error
 	result = []cache.Resource{}
 
 	for _, route := range gateway.Spec.Routes {
-		cluster, err := buildEnvoyCluster(route)
+		cluster, err := buildCluster(route)
 		if err != nil {
 			return nil, err
 		}
@@ -149,7 +166,7 @@ func buildVirtualHosts(gateway *v1alpha1.Gateway) (virtualHost *envoyRoute.Virtu
 	transformedRoutes := make([]envoyRoute.Route, len(routes))
 
 	for idx, route := range routes {
-		value, err := buildEnvoyRoute(route)
+		value, err := buildRoute(route)
 		if err != nil {
 			return nil, fmt.Errorf("couldn't build virtual host for gateway %s", gateway.Name)
 		}
@@ -162,31 +179,21 @@ func buildVirtualHosts(gateway *v1alpha1.Gateway) (virtualHost *envoyRoute.Virtu
 		Routes:  transformedRoutes,
 	}
 
-	if gateway.Spec.Hosts == nil {
+	if gateway.Spec.Hosts == nil || len(gateway.Spec.Hosts) == 0 {
 		virtualHost.Domains = []string{"*"}
 	}
 
 	return
 }
 
-//buildEnvoyRoute gets the function to translate routes accordingly with RouteType
-func buildEnvoyRoute(in *v1alpha1.Route) (route *envoyRoute.Route, err error) {
-	convert := ListenerConversionMap[in.RouteType]
-	route, err = convert(in)
-	return
-}
+//buildRoute produces an envoy RDS Route from Gateway RouteType
+func buildRoute(in *v1alpha1.Route) (out *envoyRoute.Route, err error) {
+	log.Debug("parsing dns route")
 
-//buildEnvoyRoute gets the function to translate clusters accordingly with RouteType
-func buildEnvoyCluster(in *v1alpha1.Route) (cluster *envoy.Cluster, err error) {
-	convert := ClusterConversionMap[in.RouteType]
-	cluster, err = convert(in)
-	return
-}
-
-//buildConsulDNSRoute produces an envoy RDS Route from Gateway RouteType
-func buildConsulDNSRoute(in *v1alpha1.Route) (out *envoyRoute.Route, err error) {
-	//TODO: See if we need to support HostRewrite
-	//HostRewriteSpecifier:
+	err = validator.Validate(in)
+	if err != nil {
+		return nil, err
+	}
 
 	out = &envoyRoute.Route{
 		Match: envoyRoute.RouteMatch{
@@ -197,72 +204,60 @@ func buildConsulDNSRoute(in *v1alpha1.Route) (out *envoyRoute.Route, err error) 
 		Action: &envoyRoute.Route_Route{
 			Route: &envoyRoute.RouteAction{
 				ClusterSpecifier: &envoyRoute.RouteAction_Cluster{
-					Cluster: in.Service.GetClusterId(),
+					Cluster: in.GetClusterId(),
 				},
 			},
 		},
 	}
 
-	route := out.GetAction().(*envoyRoute.Route_Route).Route
+	action := out.Action.(*envoyRoute.Route_Route).Route
+	buildRetryPolicy(in, action)
+	buildConnectionPoolSettingsRoute(in, action)
+	buildFaultInjection(in, out)
+
 	if in.Rewrite != nil && in.Rewrite.URI != "" {
-		route.HostRewriteSpecifier = &envoyRoute.RouteAction_HostRewrite{
+		action.HostRewriteSpecifier = &envoyRoute.RouteAction_HostRewrite{
 			HostRewrite: in.Rewrite.URI,
 		}
 	} else {
-		route.HostRewriteSpecifier = &envoyRoute.RouteAction_AutoHostRewrite{
+		action.HostRewriteSpecifier = &envoyRoute.RouteAction_AutoHostRewrite{
 			AutoHostRewrite: &types.BoolValue{Value: true},
 		}
 	}
 
 	return
+}
+
+func buildFaultInjection(in *v1alpha1.Route, out *envoyRoute.Route) {
+	if fault := in.FaultInjection; fault != nil {
+		if protoMsg, err := util.MessageToStruct(translateFault(fault)); err == nil {
+			out.PerFilterConfig["envoy.fault"] = protoMsg
+		}
+	}
 }
 
 //buildConsulSDSRoute produces envoy endpoints from consul catalog api calls
 //WARNING: Not implemented this will be supported in future versions
-func buildConsulSDSRoute(in *v1alpha1.Route) (out *envoyRoute.Route, err error) {
-	//NOT SUPPORTED IN V1ALPHA1
+func buildConsulSDSRoute(*v1alpha1.Route, *envoyRoute.Route) (err error) {
+	err = fmt.Errorf(MsgNotSupported, "Consul SDS Route")
+	log.Error(err)
 	return
 }
 
-//buildDNSRoute produces envoy endpoints from DNS gateway RouteType
-func buildDNSRoute(in *v1alpha1.Route) (out *envoyRoute.Route, err error) {
-
-	action := &envoyRoute.RouteAction{
-		ClusterSpecifier: &envoyRoute.RouteAction_Cluster{
-			Cluster: in.DNS.GetClusterId(),
-		},
-		HostRewriteSpecifier: &envoyRoute.RouteAction_AutoHostRewrite{
-			AutoHostRewrite: &types.BoolValue{Value: true},
-		},
+//buildConnectionPoolSettingsRoute build envoy's connection policies.
+func buildConnectionPoolSettingsRoute(in *v1alpha1.Route, action *envoyRoute.RouteAction) {
+	duration := DefaultConnectTimeout
+	if in.ConnectionPoolSettings != nil && in.ConnectionPoolSettings.Timeout != nil {
+		duration = in.ConnectionPoolSettings.Timeout.Duration()
 	}
 
-	if in.Rewrite != nil && in.Rewrite.URI != "" {
-		action.PrefixRewrite = in.Rewrite.URI
-	}
-
-	buildRetryPolicy(in, action)
-	if in.ConnectionPoolSettings != nil {
-		if in.ConnectionPoolSettings.Timeout.Duration != 0 {
-			action.Timeout = &in.ConnectionPoolSettings.Timeout.Duration
-		}
-	}
-
-	out = &envoyRoute.Route{
-		Match: envoyRoute.RouteMatch{
-			PathSpecifier: &envoyRoute.RouteMatch_Prefix{
-				Prefix: in.Prefix,
-			},
-		},
-		Action: &envoyRoute.Route_Route{
-			Route: action,
-		},
-	}
-
-	return
+	action.Timeout = &duration
 }
 
 //buildRetryPolicy translates Gateway retryPolicy objects to envoy configuration
 func buildRetryPolicy(in *v1alpha1.Route, action *envoyRoute.RouteAction) {
+	log.Debug("parsing retry policy")
+
 	if in.RetryPolicy != nil {
 		action.RetryPolicy = &envoyRoute.RouteAction_RetryPolicy{}
 		numRetries := uint32(in.RetryPolicy.NumRetries)
@@ -270,50 +265,73 @@ func buildRetryPolicy(in *v1alpha1.Route, action *envoyRoute.RouteAction) {
 		if numRetries != 0 {
 			action.RetryPolicy.NumRetries = &types.UInt32Value{Value: uint32(numRetries)}
 		}
-		perTryTimeout := in.RetryPolicy.PerTryTimeout.Duration
+		perTryTimeout := in.RetryPolicy.PerTryTimeout
 
-		if perTryTimeout != 0 {
-			action.RetryPolicy.PerTryTimeout = &perTryTimeout
+		if perTryTimeout != nil {
+			duration := perTryTimeout.Duration()
+			action.RetryPolicy.PerTryTimeout = &duration
+		}
+
+		if in.RetryPolicy.MaxTimeout != nil {
+			duration := in.RetryPolicy.MaxTimeout.Duration()
+			action.Timeout = &duration
 		}
 	}
 }
 
 //buildConsulSDSCluster extracts envoy's cluster definition from consul catalog api
 //WARNING: Not implemented this will be supported in future versions
-func buildConsulSDSCluster(in *v1alpha1.Route) (out *envoy.Cluster, err error) {
-	//NOT SUPPORTED IN V1ALPHA1
+func buildConsulSDSCluster(*v1alpha1.Route, *envoy.Cluster) (err error) {
+	log.Warnf(MsgNotSupported, "Consul SDS Cluster")
 	return
 }
 
-func buildConsulDNSCluster(in *v1alpha1.Route) (out *envoy.Cluster, err error) {
-	domain := viper.GetString("domain")
-	host := buildConsulAddress(in.Service.Tag, in.Service.Name, in.Service.Datacenter, domain)
-	address := BuildAddress(host, in.Service.Port)
-
+func buildCluster(in *v1alpha1.Route) (out *envoy.Cluster, err error) {
+	//Default cluster definition
 	out = &envoy.Cluster{
-		Name:            in.Service.GetClusterId(),
-		Hosts:           []*core.Address{&address},
+		Name:            in.GetClusterId(),
 		Type:            envoy.Cluster_STRICT_DNS,
 		DnsLookupFamily: envoy.Cluster_V4_ONLY,
 		LbPolicy:        envoy.Cluster_LbPolicy(in.GetLoadBalancerSettings().LoadBalancerType),
 	}
 
-	if in.ConnectionPoolSettings != nil && in.ConnectionPoolSettings.Timeout.Duration != 0 {
-		out.ConnectTimeout = in.ConnectionPoolSettings.Timeout.Duration
-	}
-
 	buildConnectionPoolSettings(in, out)
+	buildTLSContext(in, out)
 
+	//Uses parser according to conversion map
+	convert := ClusterConversionMap[in.RouteType]
+	err = convert(in, out)
+
+	return
+}
+
+func buildTLSContext(in *v1alpha1.Route, out *envoy.Cluster) {
 	if in.TLSContext != nil && in.TLSContext.SNI != "" {
 		out.TlsContext = &auth.UpstreamTlsContext{
 			Sni: in.TLSContext.SNI,
 		}
 	}
+}
 
+func buildConsulDNSCluster(in *v1alpha1.Route, out *envoy.Cluster) (err error) {
+	if in.Service == nil {
+		err = fmt.Errorf("trying building dns cluster with nil service")
+		log.Error(err)
+		return
+	}
+
+	domain := viper.GetString("domain")
+	host := buildConsulAddress(in.Service.Tag, in.Service.Name, in.Service.Datacenter, domain)
+	address := BuildAddress(host, in.Service.Port)
+	out.Hosts = []*core.Address{&address}
+	out.Type = envoy.Cluster_STRICT_DNS
 	return
 }
 
 func buildConnectionPoolSettings(in *v1alpha1.Route, out *envoy.Cluster) {
+	setConnectionPoolDefaults(in)
+	out.ConnectTimeout = in.ConnectionPoolSettings.Timeout.Duration()
+
 	if in.ConnectionPoolSettings != nil {
 		thresholds := &envoyCluster.CircuitBreakers_Thresholds{
 			MaxConnections:     &types.UInt32Value{Value: uint32(in.ConnectionPoolSettings.MaxRequestsPerConnection)},
@@ -326,30 +344,22 @@ func buildConnectionPoolSettings(in *v1alpha1.Route, out *envoy.Cluster) {
 	}
 }
 
-func buildDNSCluster(in *v1alpha1.Route) (out *envoy.Cluster, err error) {
-
+func buildRawDNSCluster(in *v1alpha1.Route, out *envoy.Cluster) (err error) {
 	address := BuildAddress(in.DNS.Address, uint32(in.DNS.Port))
-	out = &envoy.Cluster{
-		Name:            in.DNS.GetClusterId(),
-		Hosts:           []*core.Address{&address},
-		Type:            envoy.Cluster_DiscoveryType(in.DNS.Type),
-		DnsLookupFamily: envoy.Cluster_V4_ONLY,
-		LbPolicy:        envoy.Cluster_LbPolicy(in.GetLoadBalancerSettings().LoadBalancerType),
+	out.Hosts = []*core.Address{&address}
+	dnsType := envoy.Cluster_STRICT_DNS
+	out.LbPolicy = envoy.Cluster_LbPolicy(in.GetLoadBalancerSettings().LoadBalancerType)
+
+	if in.DNS.Type != nil {
+		dnsType = envoy.Cluster_DiscoveryType(out.Type)
 	}
 
-	if in.ConnectionPoolSettings != nil && in.ConnectionPoolSettings.Timeout.Duration != 0 {
-		out.ConnectTimeout = in.ConnectionPoolSettings.Timeout.Duration
-	}
-
-	if in.TLSContext != nil && in.TLSContext.SNI != "" {
-		out.TlsContext = &auth.UpstreamTlsContext{
-			Sni: in.TLSContext.SNI,
-		}
-	}
+	out.Type = dnsType
 
 	return
 }
 
+//buildConsulAddress builds fqdn for consul based endpoint. e.g {tag}.{service}.{datacenter}.{domain}
 func buildConsulAddress(tag string, serviceName string, datacenter string, domain string) (dns string) {
 	dns = fmt.Sprintf("%s.service", serviceName)
 
@@ -364,4 +374,61 @@ func buildConsulAddress(tag string, serviceName string, datacenter string, domai
 	dns = fmt.Sprintf("%s.%s", dns, domain)
 
 	return
+}
+
+//setConnectionPoolDefaults initialize routes with connection pool defaults
+func setConnectionPoolDefaults(in *v1alpha1.Route) {
+	if in.ConnectionPoolSettings == nil {
+		in.ConnectionPoolSettings = &v1alpha1.ConnectionPoolSettings{}
+	}
+
+	if in.ConnectionPoolSettings.Timeout == nil {
+		in.ConnectionPoolSettings.Timeout = v1alpha1.NewReadableDuration(DefaultConnectTimeout)
+	}
+
+	if in.ConnectionPoolSettings.MaxRequestsPerConnection == 0 {
+		in.ConnectionPoolSettings.MaxRequestsPerConnection = 1024
+	}
+
+	if in.ConnectionPoolSettings.Http1MaxPendingRequests == 0 {
+		in.ConnectionPoolSettings.Http1MaxPendingRequests = 1024
+	}
+}
+
+// translateFault translates networking.HTTPFaultInjection into Envoy's HTTPFault
+func translateFault(in *v1alpha1.FaultInjection) *xdshttpfault.HTTPFault {
+	if in == nil {
+		return nil
+	}
+
+	out := xdshttpfault.HTTPFault{}
+	if in.Delay != nil {
+		out.Delay = &xdsfault.FaultDelay{Type: xdsfault.FaultDelay_FIXED}
+		out.Delay.Percentage = translatePercentToFractionalPercent(in.DelayPercent)
+
+		delayDuration := in.Delay.Duration()
+		out.Delay.FaultDelaySecifier = &xdsfault.FaultDelay_FixedDelay{
+			FixedDelay: &delayDuration,
+		}
+
+		if in.AbortPercent != nil {
+			out.Abort = &xdshttpfault.FaultAbort{}
+			out.Abort.Percentage = translatePercentToFractionalPercent(in.AbortPercent)
+		}
+
+		if out.Delay == nil && out.Abort == nil {
+			return nil
+		}
+	}
+
+	return &out
+}
+
+// translatePercentToFractionalPercent translates an float pointer
+// to an envoy.type.FractionalPercent instance.
+func translatePercentToFractionalPercent(p *float32) *envoy_type.FractionalPercent {
+	return &envoy_type.FractionalPercent{
+		Numerator:   uint32(*p * 10000),
+		Denominator: envoy_type.FractionalPercent_MILLION,
+	}
 }
