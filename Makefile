@@ -48,7 +48,7 @@ lint: ## Runs go lint checks
 e2e: build ## Compiles docker and use kubectl apply to deploy latest dev fanplane
 	docker-compose build
 	docker-compose push
-	kubectl apply -f samples/kube
+	kubectl apply -f kube/
 
 .PHONY: test
 test: ## Run unit tests and output coverage report

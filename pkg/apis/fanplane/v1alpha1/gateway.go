@@ -2,7 +2,6 @@ package v1alpha1
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"gopkg.in/validator.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -18,9 +17,29 @@ type Gateway struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Status GatewayStatus `json:"status,omitempty"`
+	Status Status `json:"status,omitempty"`
 
 	Spec *GatewaySpec `json:"spec" validate:"nonzero"`
+}
+
+func (in *Gateway) GetTypeMeta() metav1.TypeMeta {
+	return in.TypeMeta
+}
+
+func (in *Gateway) GetSpec() interface{} {
+	return in.Spec
+}
+
+func (in *Gateway) SetSpec(spec interface{}) {
+	in.Spec = spec.(*GatewaySpec)
+}
+
+func (in *Gateway) GetObjectMeta() metav1.ObjectMeta {
+	return in.ObjectMeta
+}
+
+func (in *Gateway) SetObjectMeta(objMeta metav1.ObjectMeta) {
+	in.ObjectMeta = objMeta
 }
 
 // GatewaySpec contains the definition of Envoy's Routes, Listeners and Clusters
@@ -29,11 +48,6 @@ type GatewaySpec struct {
 	Hosts    []string          `json:"hosts"`
 	Listener *Listener         `json:"listener,omitempty" validate:"nonzero"`
 	Routes   []*Route          `json:"routes"`
-}
-
-// GatewayStatus is the status for a Gateway resource
-type GatewayStatus struct {
-	Processed bool `json:"processed"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -46,34 +60,24 @@ type GatewayList struct {
 	Items []Gateway `json:"items"`
 }
 
-func (in *Gateway) GetSpec() interface{} {
-	return in.Spec
-}
-
-func (in *Gateway) GetSidecarSelector() string {
-	return in.Name
-}
-
-// LoadGateway reads configuration data from a YAML file
+// LoadGateway reads configuration data from a YAML filestore
 func LoadGateway(path string) (cfg *Gateway, err error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Couldn't reader %s file", path))
+		return nil, fmt.Errorf(MsgConvertError, path, "Gateway")
 	}
 	defer file.Close()
 
 	reader := bufio.NewReader(file)
 
 	cfg = &Gateway{}
-	decoder := yaml.NewYAMLOrJSONDecoder(reader, reader.Size())
-	err = decoder.Decode(cfg)
 
-	if err != nil {
+	decoder := yaml.NewYAMLOrJSONDecoder(reader, reader.Size())
+	if err := decoder.Decode(cfg) ;err != nil {
 		return nil, fmt.Errorf("parsing config: %s", err)
 	}
 
-	err = validator.Validate(cfg)
-	if err != nil {
+	if err := validator.Validate(cfg); err != nil {
 		return nil, fmt.Errorf("invalid config: %s", err)
 	}
 

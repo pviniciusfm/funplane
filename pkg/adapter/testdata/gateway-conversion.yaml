@@ -1,11 +1,8 @@
-apiVersion: networking.fanplane.io/v1alpha1
+apiVersion: fanplane.io/v1alpha1
 kind: Gateway
 metadata:
   name: falcon
 spec:
-  selector:
-    version: v1
-
   listener:
     port: 443
     protocol: HTTPS
@@ -21,6 +18,7 @@ spec:
     connectionPool:
       timeout: 5s
     retryPolicy:
+      maxTimeout: 10s
       numRetries: 2
       perTryTimeout: 1s
 

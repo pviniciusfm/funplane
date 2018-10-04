@@ -4,8 +4,8 @@ metadata:
   name: falcon
 spec:
   listener:
-    port: 443
-    protocol: HTTPS
+    port: 8080
+    protocol: HTTP
 
   routes:
   - type: CONSUL_DNS
@@ -35,10 +35,9 @@ spec:
       sni: rc-data-services.dev.frgcloud.com
 
   - type: CONSUL_DNS
-    prefix: /graphql
+    prefix: /graphql2
     service:
       name: data-services
-      tag: rc
     retryPolicy:
       numRetries: 2
       perTryTimeout: 1s
@@ -46,7 +45,10 @@ spec:
   - type: DNS
     prefix: /flex/v1/keys
     dns:
-      fqdn: api.cybersource.com
+      address: api.cybersource.com
+      port: 443
+    connectionPool:
+      timeout: 6s
     retryPolicy:
       numRetries: 2
       perTryTimeout: 500ms

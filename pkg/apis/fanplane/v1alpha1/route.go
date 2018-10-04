@@ -1,14 +1,12 @@
 package v1alpha1
 
 import (
-	"fmt"
 	"k8s.io/apimachinery/pkg/util/uuid"
 )
 
-const UnknownRouteType = "UNKNOWN"
-
 // Route defines a route destination for gateway
 type Route struct {
+	clusterId  string
 	Prefix     string              `json:"prefix,omitempty"`
 	RouteType  RouteType           `json:"type,omitempty"`
 	Service    *ConsulServiceEntry `json:"service,omitempty"`
@@ -20,6 +18,7 @@ type Route struct {
 	LoadBalancerSettings   *LoadBalancerSettings   `json:"loadBalancer,omitempty"`
 	ConnectionPoolSettings *ConnectionPoolSettings `json:"connectionPool,omitempty"`
 	RetryPolicy            *RetryPolicy            `json:"retryPolicy,omitempty"`
+	FaultInjection         *FaultInjection         `json:"faultInjection,omitempty"`
 }
 
 //go:generate jsonenums -type=RouteType
@@ -45,27 +44,18 @@ type ConsulServiceEntry struct {
 	Port       uint32 `json:"port"`
 }
 
-func (in *ConsulServiceEntry) GetClusterId() string {
-	return fmt.Sprintf("%s|%s", in.Name, in.Tag)
-}
-
-//String returns string representation of RouteType
-func (r RouteType) String() string {
-	out := UnknownRouteType
-
-	if _, val := _RouteTypeValueToName[r]; val {
-		out = _RouteTypeValueToName[r]
+func (in *Route) GetClusterId() string {
+	if in.clusterId == "" {
+		in.clusterId = string(uuid.NewUUID())
 	}
-
-	return out
+	return in.clusterId
 }
 
 //DNSRoute is used to represent a Logical DNS Route Type Entry
 type DNSRoute struct {
-	id      string  `json:id,omitempty`
-	Type    DNSType `json:"type,omitempty"`
-	Address string  `json:"address,omitempty"`
-	Port    int32   `json:"port,omitempty"`
+	Type    *DNSType `json:"type,omitempty"`
+	Address string   `json:"address,omitempty"`
+	Port    int32    `json:"port,omitempty"`
 }
 
 //go:generate jsonenums -type=DNSType
@@ -78,13 +68,6 @@ const (
 	EDS
 )
 
-func (in *DNSRoute) GetClusterId() string {
-	if in.id == "" {
-		in.id = string(uuid.NewUUID())
-	}
-	return in.id
-}
-
 func (in *Route) GetLoadBalancerSettings() *LoadBalancerSettings {
 	if in.LoadBalancerSettings == nil {
 		in.LoadBalancerSettings = &LoadBalancerSettings{}
@@ -95,4 +78,14 @@ func (in *Route) GetLoadBalancerSettings() *LoadBalancerSettings {
 //TLSContext defines Server Name Indication of the upstream connection
 type TLSContext struct {
 	SNI string `json:"sni,omitempty"`
+}
+
+//FaultInjection makes possible experiments of connection reliability
+type FaultInjection struct {
+	//AbortPercent the percentage of operations/connection requests on which the envoy will abort connections.
+	AbortPercent *float32 `json:"abortPercent,omitempty"`
+	//Delay add a fixed delay before forwarding the operation upstream
+	Delay *ReadableDuration `json:"fixedDelay,omitempty"`
+	//DelayPercent the percentage of operations/connection requests on which the delay will be injected.
+	DelayPercent *float32 `json:"delayPercent,omitempty"`
 }

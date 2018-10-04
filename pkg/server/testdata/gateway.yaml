@@ -1,7 +1,7 @@
 apiVersion: fanplane.io/v1alpha1
 kind: Gateway
 metadata:
-  name: falcon
+  name: test-gateway
 spec:
   listener:
     port: 443
@@ -23,30 +23,11 @@ spec:
     loadBalancer:
       type: ROUND_ROBIN
 
-  - type: CONSUL_DNS
-    prefix: /graphql
-    service:
-      name: data-services
-      tag: rc
-    retryPolicy:
-      numRetries: 2
-      perTryTimeout: 1s
-    tlsContext:
-      sni: rc-data-services.dev.frgcloud.com
-
-  - type: CONSUL_DNS
-    prefix: /graphql
-    service:
-      name: data-services
-      tag: rc
-    retryPolicy:
-      numRetries: 2
-      perTryTimeout: 1s
-
   - type: DNS
     prefix: /flex/v1/keys
     dns:
-      fqdn: api.cybersource.com
+      address: api.cybersource.com
+      port: 443
     retryPolicy:
       numRetries: 2
       perTryTimeout: 500ms

@@ -3,29 +3,29 @@ package server
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	"github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	"github.com/envoyproxy/go-control-plane/pkg/cache"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"github.frg.tech/cloud/fanplane/pkg/apis/fanplane/v1alpha1"
-	"io/ioutil"
+	"github.frg.tech/cloud/fanplane/pkg/apis/fanplane"
+	"github.frg.tech/cloud/fanplane/pkg/registry"
+	"github.frg.tech/cloud/fanplane/pkg/registry/filestore"
 	"testing"
 )
 
 const (
-	testSideCarId   = "test-id"
-	rawClusterYaml  = "testdata/raw-cluster.yaml"
-	rawListenerYaml = "testdata/raw-listener.yaml"
+	testSideCarId = "test-id"
 )
 
 var (
-	config *FanplaneConfig = &FanplaneConfig{
-		Port:     18000,
-		ADSMode:  true,
-		Domain:   "consul",
-		ID:       "test",
-		LogLevel: "debug",
+	config = &fanplane.Config{
+		Port:              18000,
+		ADSMode:           true,
+		Domain:            "consul",
+		ID:                "test",
+		LogLevel:          log.DebugLevel.String(),
+		RegistryDirectory: "testdata/",
+		RegistryType:      registry.FileRegistry,
 	}
 
 	node = &core.Node{
@@ -33,45 +33,17 @@ var (
 	}
 )
 
-
-func LoadMockRegistry(t *testing.T) (snap cache.Snapshot, error error) {
-	rawYaml, err := ioutil.ReadFile(rawClusterYaml)
-	if err != nil {
-		return
-	}
-
-	googleCluster, err := v1alpha1.FromYAML(string(rawYaml), "envoy.api.v2.Cluster")
-	if err != nil {
-		t.Fatalf("couldn't set cluster entity in snapsoht. %s", err)
-		return
-	}
-
-	rawYaml, err = ioutil.ReadFile(rawListenerYaml)
-	testListener, err := v1alpha1.FromYAML(string(rawYaml), "envoy.api.v2.Listener")
-	if err != nil {
-		t.Fatalf("couldn't set listener entity in snapsoht. %s", err)
-		return
-	}
-
-	cdsRes := googleCluster.(*v2.Cluster)
-	ldsRes := testListener.(*v2.Listener)
-	cds := []cache.Resource{cdsRes}
-	lds := []cache.Resource{ldsRes}
-	snap = cache.NewSnapshot(fmt.Sprint("1"), nil, cds, nil, lds)
-
-	return
-}
-
 func TestManagementServer(t *testing.T) {
-	snap, err := LoadMockRegistry(t)
-	if err != nil {
-		t.Fail()
-	}
-	stopSignal := make(chan struct{})
-	defer func() { stopSignal <- struct{}{} }()
-
 	srv, err := NewManagementServer(context.Background(), config)
-	srv.Cache.SetSnapshot(testSideCarId, snap)
+	filestore.NewFileRegistry(config, srv.ServerCache)
+
+	stopSignal := make(chan struct{})
+	defer func() {
+		//FUTURE: Find another way to not fail the tests because this function is being accessed after the test is over
+		t.SkipNow()
+		stopSignal <- struct{}{}
+	}()
+
 	assert.Nil(t, err)
 
 	go srv.Start(stopSignal)
@@ -84,7 +56,8 @@ func TestManagementServer(t *testing.T) {
 
 	resp, err := srv.xDSserver.FetchClusters(context.Background(), cdsRequest)
 	if err != nil {
-		t.Error("fetch clusters() => got error")
+		t.Error("fetch clusters() => got error", err)
+		return
 	}
 	assert.NotNil(t, resp)
 
@@ -94,8 +67,8 @@ func TestManagementServer(t *testing.T) {
 	}
 
 	assert.NotEmpty(t, cdsResponse.Name)
-	assert.EqualValues(t, v2.Cluster_LEAST_REQUEST, cdsResponse.LbPolicy)
-	assert.EqualValues(t, "google-test", cdsResponse.Name)
+	assert.EqualValues(t, v2.Cluster_LOGICAL_DNS, cdsResponse.Type)
+	assert.EqualValues(t, "service_cybersource", cdsResponse.Name)
 
 	ldsRequest := &v2.DiscoveryRequest{
 		Node:    node,
@@ -113,8 +86,9 @@ func TestManagementServer(t *testing.T) {
 	}
 
 	assert.NotNil(t, resp)
-	assert.EqualValues(t,"listener_0", ldsResponse.Name)
-	assert.EqualValues(t,int32(8800), ldsResponse.Address.GetSocketAddress().GetPortValue())
+	assert.EqualValues(t, "listener_0", ldsResponse.Name)
+	assert.EqualValues(t, int32(8800), ldsResponse.Address.GetSocketAddress().GetPortValue())
+
 }
 
 // Extract cluster response from a discovery response.

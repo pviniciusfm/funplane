@@ -1,5 +1,5 @@
 package fanplane
 
 const (
-	GroupName = "network.fanplane.io"
+	GroupName = "fanplane.io"
 )
