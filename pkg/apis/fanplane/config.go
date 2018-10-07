@@ -3,6 +3,7 @@ package fanplane
 import (
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 //Config is the object that holds all parameterized configuration of envoy control plane
@@ -60,6 +61,10 @@ func (in *Kind) GetObjectMeta() meta_v1.ObjectMeta {
 // SetObjectMeta for a wrapper
 func (in *Kind) SetObjectMeta(metadata meta_v1.ObjectMeta) {
 	in.ObjectMeta = metadata
+}
+
+func (in *Kind) GetObjectKind() schema.ObjectKind {
+	return in
 }
 
 // IstioKindList is the generic Kubernetes API list wrapper

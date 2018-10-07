@@ -14,12 +14,9 @@ kind: CustomResourceDefinition
 metadata:
   name: gateways.fanplane.io
 spec:
-  scope: cluster-scoped
+  scope: Namespaced
   group: fanplane.io
-  versions:
-  - name: v1alpha1
-    served: true
-    storage: true
+  version: v1alpha1
   names:
     kind: Gateway
     plural: gateways
@@ -32,16 +29,15 @@ metadata:
   name: envoybootstraps.fanplane.io
 spec:
   group: fanplane.io
-  versions:
-  - name: v1alpha1
-    served: true
-    storage: true
-  scope: cluster-scoped
+  version: v1alpha1
+  scope: Namespaced
   names:
     kind: EnvoyBootstrap
     plural: envoybootstraps
     shortNames:
     - eb
+---
+# To service account contacts kubernetes api is required that the api server is able to be contacted from infra
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -51,25 +47,41 @@ metadata:
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  namespace: fanplane
   name: fanplane-role
 rules:
 - apiGroups: ["fanplane.io"] # "" indicates the core API group
   resources: ["envoybootstraps", "gateways"]
-  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  verbs: ["*"]
 - apiGroups: [""] # "" indicates the core API group
   resources: ["pods"]
-  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  verbs: ["get", "list", "watch"]
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: fanplane-role
+  name: fanplane-clusterrole
 subjects:
 - kind: User
-  name: system:serviceaccount:fanplane:buildkite-fanplane-account
-  apiGroup: rbac.authorization.k8s.io
+  name: system:serviceaccount:default:{{ .Values.serviceAccount.name }}
+- kind: ServiceAccount
+  name: default
+  namespace: fanplane
 roleRef:
   kind: ClusterRole
   name: fanplane-role
   apiGroup: rbac.authorization.k8s.io
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: fanplane-role
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: fanplane
+roleRef:
+  kind: ClusterRole
+  name: fanplane-role
+  apiGroup: rbac.authorization.k8s.io
+
+

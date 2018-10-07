@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"gopkg.in/validator.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"os"
 )
@@ -40,6 +41,10 @@ func (in *Gateway) GetObjectMeta() metav1.ObjectMeta {
 
 func (in *Gateway) SetObjectMeta(objMeta metav1.ObjectMeta) {
 	in.ObjectMeta = objMeta
+}
+
+func (in *Gateway) GetObjectKind() schema.ObjectKind {
+	return in
 }
 
 // GatewaySpec contains the definition of Envoy's Routes, Listeners and Clusters

@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "fanplane.name" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ include "fanplane.name" . }}
+    chart: {{ include "fanplane.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: tcp
+    dns.alpha.kubernetes.io/internal: {{ .Values.fanplane.domain }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+  - port: {{ .Values.service.port }}
+    targetPort: 18000
+    protocol: TCP
+    name: fanplane
+  loadBalancerSourceRanges:
+  - "10.142.0.0/15"
+  - "172.16.0.0/21"
+  - {{.Values.fanplane.envGroupCIDR}}
+  selector:
+    app: {{ include "fanplane.name" . }}
+    release: {{ .Release.Name }}

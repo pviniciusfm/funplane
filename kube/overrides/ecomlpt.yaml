@@ -1,0 +1,5 @@
+fanplane:
+  domain: fanplane.lpt.frgcloud.com # This needs to be overwritten
+  consulDomain: dynamic.lpt.frgcloud.com
+  logLevel: warn
+  envGroupCIDR: "10.153.0.0/16"

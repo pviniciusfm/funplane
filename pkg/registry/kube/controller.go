@@ -15,9 +15,11 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/runtime"
+	apimachinery "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 	kubeCache "k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
@@ -26,15 +28,13 @@ import (
 const controllerAgentName = "fanplane-controller"
 
 const (
-	// SuccessSynced is used as part of the Event 'reason' when a EnvoyBootstrap is synced
+	// SuccessSynced is used as part of the Event 'reason' when a Fanplane object is synced
 	SuccessSynced = "Synced"
-	// ErrResourceExists is used as part of the Event 'reason' when a EnvoyBootstrap fails
-	// to sync due to a Deployment of the same name already existing.
-	ErrResourceExists = "ErrResourceExists"
-
+	// SuccessSynced is used as part of the Event 'reason' when a Fanplane object is synced
+	SuccessDeleted = "Deleted"
 	// MessageResourceExists is the message used for Events when a resource
 	// fails to sync due to a Deployment already existing
-	MessageResourceExists = "Resource %q already exists and is not managed by EnvoyBootstrap"
+	MessageResourceDeleted = "Resource %q deleted from cache successfully"
 	// MessageResourceSynced is the message used for an Event fired when a EnvoyBootstrap
 	// is synced successfully
 	MessageResourceSynced = "EnvoyBootstrap synced successfully"
@@ -89,8 +89,7 @@ func NewController(
 	log.Info("Creating event broadcaster")
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(log.Infof)
-	//typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
-	//eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events("")})
+
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	controller := &Controller{
@@ -138,7 +137,7 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	defer c.gatewayWorkqueue.ShutDown()
 
 	// Start the informer factories to begin populating the informer caches
-	log.Info("Starting EnvoyBootstrap controller")
+	log.Info("Starting Fanplane controller")
 
 	// Wait for the caches to be synced before starting workers
 	log.Info("Waiting for informer caches to sync")
@@ -286,6 +285,7 @@ func (c *Controller) processNextGatewayWorkItem() bool {
 // converge the two. It then updates the Status block of the EnvoyBootstrap resource
 // with the current status of the resource.
 func (c *Controller) syncHandlerEnvoyBootstrap(key string) error {
+	log.Debugf("syncing EnvoyBootstrap %s", key)
 	// Convert the namespace/name string into a distinct namespace and name
 	namespace, name, err := kubeCache.SplitMetaNamespaceKey(key)
 	if err != nil {
@@ -296,19 +296,26 @@ func (c *Controller) syncHandlerEnvoyBootstrap(key string) error {
 	// Get the EnvoyBootstrap resource with this namespace/name
 	envoyBootstrap, err := c.envoyBootstrapLister.EnvoyBootstraps(namespace).Get(name)
 	if err != nil {
-		// The EnvoyBootstrap resource may no longer exist, in which case we stop
-		// processing.
+
 		if errors.IsNotFound(err) {
-			runtime.HandleError(fmt.Errorf("envoyBootstrap '%s' in work queue no longer exists", key))
+			notFoundErr := fmt.Errorf("EnvoyBootstrap '%s' in work queue no longer exists", key)
+			log.WithError(err).Error(notFoundErr)
+			runtime.HandleError(notFoundErr)
 			return nil
 		}
 
 		return err
 	}
 
+	if envoyBootstrap.Status.Processed {
+		log.Infof("envoy bootstrap %s already processed, skipping...", envoyBootstrap.GetName())
+		return nil
+	}
+
 	// If an error occurs during Get/Create, we'll requeue the item so we can
 	// attempt processing again later. This could have been caused by a
 	// temporary network failure, or any other transient reason.
+	envoyBootstrap.Kind = "EnvoyBootstrap"
 	err = c.cache.Add(envoyBootstrap)
 
 	if err != nil {
@@ -350,6 +357,7 @@ func (c *Controller) syncHandlerGateway(key string) error {
 		return err
 	}
 
+	gateway.Kind = "Gateway"
 	err = c.cache.Add(gateway)
 
 	// If an error occurs during Get/Create, we'll requeue the item so we can
@@ -431,6 +439,9 @@ func (c *Controller) removeConfigurationFromCache(obj interface{}) {
 	var ok bool
 	if object, ok = obj.(metav1.Object); ok {
 		c.cache.RemoveById(object.GetName())
+		if eventObj, ok := object.(apimachinery.Object); ok {
+			c.recorder.Event(eventObj, corev1.EventTypeNormal, SuccessDeleted, MessageResourceDeleted)
+		}
 	} else {
 		log.Errorf("couldn't remove obj %s from cache", obj)
 	}
