@@ -1,0 +1,29 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fanplane
+  namespace: fanplane
+  labels:
+    app: fanplane
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fanplane
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+      labels:
+        istio-injection: disabled
+        app: fanplane
+        release: dev
+    spec:
+      serviceAccountName: buildkite-fanplane-account
+      containers:
+      - name: fanplane
+        image: "docker.repo.frg.tech/fanplane:latest"
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 18000
