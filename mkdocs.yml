@@ -1,0 +1,17 @@
+site_name: Fanplane
+theme:
+  name: 'material'
+
+nav:
+ - Readme: README.md
+ - Why?: why.md
+ - Terminology: terminology.md
+ - Architecture: architecture.md
+ - Command Line: cmd/fanplane.md
+ - EnvoyBootstrap: model/envoy-bootstrap.md
+ - Gateway: model/gateway.md
+ - Roadmap: roadmap.md
+
+repo_url: https://jaxf-github.fanatics.corp/cloud/fanplane
+repo_name: Fanplane
+
