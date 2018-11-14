@@ -1,0 +1,44 @@
+replicaCount: 1
+
+namespace: fanplane # this will create a new namespace to host fanplane
+
+fanplane:
+  domain: fanplane.lab.frgcloud.com # This needs to be overwritten
+  consulDomain: dynamic.lab.frgcloud.com
+  logLevel: warn
+  envGroupCIDR: "10.147.0.0/16"
+
+image:
+  repository: docker.repo.frg.tech/fanplane
+  tag: latest
+  pullPolicy: Always
+
+serviceAccount:
+  create: true
+  name: buildkite-fanplane-account
+
+service:
+  type: LoadBalancer
+  port: 18000
+
+
+nameOverride: ""
+fullnameOverride: ""
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #  cpu: 100m
+  #  memory: 128Mi
+  # requests:
+  #  cpu: 100m
+  #  memory: 128Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

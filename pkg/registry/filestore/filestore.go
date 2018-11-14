@@ -37,11 +37,11 @@ func (store *fileRegistry) GetRegistryType() registry.Type {
 //NewFileRegistry return new instance of FileRegistry
 func NewFileRegistry(config *fanplane.Config, cache cache.Cache) (newRegistry *fileRegistry, err error) {
 	if config.RegistryDirectory == "" {
-		return nil, fmt.Errorf("a directory path is required")
+		return nil, fmt.Errorf("directory path is required")
 	}
 
 	if _, err = os.Stat(config.RegistryDirectory); os.IsNotExist(err) {
-		return nil, fmt.Errorf("a directory path %q does not exist", config.RegistryDirectory)
+		return nil, fmt.Errorf("directory path %s does not exist", config.RegistryDirectory)
 	}
 
 	newRegistry = &fileRegistry{config: config, cache: cache, files: map[string]string{}}
@@ -119,7 +119,7 @@ func (store *fileRegistry) Remove(filePath string) (err error) {
 func (store *fileRegistry) StartWatch() {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err)
 	}
 	defer watcher.Close()
 
@@ -158,7 +158,7 @@ func (store *fileRegistry) StartWatch() {
 	err = watcher.Add(store.config.RegistryDirectory)
 
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err)
 	}
 	<-done
 }

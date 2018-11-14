@@ -1,7 +1,6 @@
 package adapter
 
 import (
-	"fmt"
 	"github.com/envoyproxy/go-control-plane/envoy/config/bootstrap/v2"
 	"github.com/envoyproxy/go-control-plane/pkg/cache"
 	log "github.com/sirupsen/logrus"
@@ -19,14 +18,13 @@ func (adapter *envoyBootstrapAdapter) GetFanplaneObject() fanplane.Object {
 
 func (adapter *envoyBootstrapAdapter) BuildListeners() (result []cache.Resource, err error) {
 	bootstrap := adapter.bootstrap.Spec.(*v2.Bootstrap)
-	if err != nil {
-		err = fmt.Errorf("couldn't process envoybootstrap model %s", err )
-		return
-	}
 
 	result = []cache.Resource{}
-	for _, listeners := range bootstrap.StaticResources.Listeners {
-		result = append(result, &listeners)
+	for _, listener := range bootstrap.GetStaticResources().GetListeners() {
+		if err = listener.Validate(); err != nil {
+			return
+		}
+		result = append(result, &listener)
 	}
 
 	return
@@ -39,14 +37,12 @@ func (envoyBootstrapAdapter) BuildRoutes() (result []cache.Resource, err error) 
 func (adapter *envoyBootstrapAdapter) BuildClusters() (result []cache.Resource, err error) {
 	bootstrap := adapter.bootstrap.Spec.(*v2.Bootstrap)
 
-	if err != nil {
-		err = fmt.Errorf("couldn't process envoybootstrap model %s", err )
-		return
-	}
-
 	result = []cache.Resource{}
-	for _, clusters := range bootstrap.GetStaticResources().GetClusters() {
-		result = append(result, &clusters)
+	for _, cluster := range bootstrap.GetStaticResources().GetClusters() {
+		if err = cluster.Validate(); err != nil {
+			return
+		}
+		result = append(result, &cluster)
 	}
 
 	return
@@ -66,7 +62,11 @@ func NewEnvoyBootstrapAdapter(obj fanplane.Object) Adapter {
 	if _, ok := obj.GetSpec().(*v2.Bootstrap); !ok {
 		parsedBootstrap, err := v1alpha1.ParseEnvoyConfig(obj.GetSpec())
 		if err != nil {
-			log.Fatal("couldn't parse EnvoyBootstrap in adapter", err)
+			log.Panic("couldn't covert EnvoyBootstrap into v2.Bootstrap model ", err)
+		}
+
+		if parsedBootstrap == nil || (parsedBootstrap.GetStaticResources() == nil) {
+			log.Panic("static_resources field is required")
 		}
 
 		if _, ok := obj.(*v1alpha1.EnvoyBootstrap); ok{

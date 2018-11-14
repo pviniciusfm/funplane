@@ -92,6 +92,8 @@ func init() {
 
 //initializeRegistry starts config registry according with Fanplane configuration
 func initializeRegistry(config *fanplane.Config, cache cache.Cache) error {
+	log.Debug("Initializing registry")
+
 	registryType, err := registry.ParseRegistryType(config.RegistryType)
 	if err != nil {
 		log.WithError(err).Fatal("couldn't initialize registry.")
@@ -106,7 +108,7 @@ func initializeRegistry(config *fanplane.Config, cache cache.Cache) error {
 		go registry.StartWatch()
 		return nil
 	case registry.KubeRegistry:
-		kube.Initialize(config, cache)
+		go kube.Initialize(config, cache)
 		return nil
 	}
 	return fmt.Errorf("registryType %q doesn not exist", registryType)

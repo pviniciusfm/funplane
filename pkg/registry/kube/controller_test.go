@@ -1,7 +1,6 @@
 package kube
 
 import (
-	"fmt"
 	"github.frg.tech/cloud/fanplane/pkg/cache"
 	"reflect"
 	"testing"
@@ -28,7 +27,7 @@ var (
 type fixture struct {
 	t *testing.T
 
-	client     *fake.Clientset
+	client *fake.Clientset
 
 	// Objects to put in the store.
 	envoyBoostrapLister []*fanplanecontroller.EnvoyBootstrap
@@ -83,9 +82,6 @@ func (f *fixture) newController() (*Controller, informers.SharedInformerFactory)
 	for _, fanplaneObject := range f.gatewayListener {
 		i.Fanplane().V1alpha1().Gateways().Informer().GetIndexer().Add(fanplaneObject)
 	}
-
-	test, _, _ := i.Fanplane().V1alpha1().EnvoyBootstraps().Informer().GetIndexer().Get(f.envoyBoostrapLister[0])
-	fmt.Println(test)
 
 	return c, i
 }
@@ -149,6 +145,10 @@ func checkAction(expected, actual core.Action, t *testing.T) {
 		expObject := e.GetObject()
 		object := a.GetObject()
 
+		if eb, ok := expObject.(*fanplanecontroller.EnvoyBootstrap); ok {
+			eb.Status.Processed = true
+		}
+
 		if !reflect.DeepEqual(expObject, object) {
 			t.Errorf("Action %s %s has wrong object\nDiff:\n %s",
 				a.GetVerb(), a.GetResource().Resource, diff.ObjectGoPrintDiff(expObject, object))
@@ -157,6 +157,10 @@ func checkAction(expected, actual core.Action, t *testing.T) {
 		e, _ := expected.(core.UpdateAction)
 		expObject := e.GetObject()
 		object := a.GetObject()
+
+		if eb, ok := expObject.(*fanplanecontroller.EnvoyBootstrap); ok {
+			eb.Status.Processed = true
+		}
 
 		if !reflect.DeepEqual(expObject, object) {
 			t.Errorf("Action %s %s has wrong object\nDiff:\n %s",
@@ -178,7 +182,8 @@ func checkAction(expected, actual core.Action, t *testing.T) {
 // Since list and watch don't change resource state we can filter it to lower
 // nose level in our tests.
 func filterInformerActions(actions []core.Action) []core.Action {
-	ret := []core.Action{}
+	var ret []core.Action
+
 	for _, action := range actions {
 		if len(action.GetNamespace()) == 0 &&
 			(action.Matches("list", "envoybootstraps") ||
@@ -215,7 +220,7 @@ func getKey(envoyBootstrap *fanplanecontroller.EnvoyBootstrap, t *testing.T) str
 func TestCreatesEnvoyBootstrap(t *testing.T) {
 	f := newFixture(t)
 	envoyBootstrap, err := fanplanecontroller.LoadEnvoyBootstrap("../testdata/envoy.yaml")
-	envoyBootstrap.Status.Processed = true
+
 	if err != nil {
 		t.Fatal("couldn't parse testdata")
 	}
@@ -241,7 +246,7 @@ func TestDoNothing(t *testing.T) {
 func TestUpdateDeployment(t *testing.T) {
 	f := newFixture(t)
 	envoyBootstrap, err := fanplanecontroller.LoadEnvoyBootstrap("../testdata/envoy.yaml")
-	envoyBootstrap.Status.Processed = true
+
 	if err != nil {
 		t.Fatal("couldn't parse testdata")
 	}

@@ -1,0 +1,30 @@
+ _______           ______  _
+(_______)         (_____ \| |
+ _____ _____ ____  _____) ) | _____ ____  _____
+|  ___|____ |  _ \|  ____/| |(____ |  _ \| ___ |
+| |   / ___ | | | | |     | |/ ___ | | | | ____|
+|_|   \_____|_| |_|_|      \_)_____|_| |_|_____)
+
+
+Please see  https://jaxf-github.fanatics.corp/pages/cloud/fanplane/ for reference
+
+Fanplane is ready to be used.
+
+{{- if .Values.serviceAccount.create }}
+
+To use the token for interacting with fanplane objects you will need to get it from kubectl.
+
+Use the following snipet to set the variable ${FANPLANE_SA_TOKEN} with the token:
+
+FANPLANE_SERVICE_SECRET=$(kubectl get sa {{ .Values.serviceAccount.name }} -o jsonpath="{.secrets[0].name}")
+FANPLANE_SA_TOKEN=$(kubectl get secret ${FANPLANE_SERVICE_SECRET} -o jsonpath="{.data.token}" | base64 --decode)
+
+{{- end }}
+
+{{- if contains "LoadBalancer" .Values.service.type }}
+    Fanplane url:
+      {{ .Values.fanplane.domain }}:{{ .Values.service.port }}
+
+    NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+           You can watch the status of by running 'kubectl get svc -w {{ include "fanplane.fullname" . }}'
+{{- end }}

@@ -231,7 +231,7 @@ func buildRoute(in *v1alpha1.Route) (out *envoyRoute.Route, err error) {
 func buildFaultInjection(in *v1alpha1.Route, out *envoyRoute.Route) {
 	if fault := in.FaultInjection; fault != nil {
 		if protoMsg, err := util.MessageToStruct(translateFault(fault)); err == nil {
-			out.PerFilterConfig["envoy.fault"] = protoMsg
+			out.PerFilterConfig[util.Fault] = protoMsg
 		}
 	}
 }

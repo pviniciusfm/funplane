@@ -1,0 +1,87 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fanplane
+  labels:
+    istio-injection: disabled
+  annotations:
+    iam.amazonaws.com/allowed-roles: |
+      ["deny/*"]
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: gateways.fanplane.io
+spec:
+  scope: Namespaced
+  group: fanplane.io
+  version: v1alpha1
+  names:
+    kind: Gateway
+    plural: gateways
+    shortNames:
+    - egt
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: envoybootstraps.fanplane.io
+spec:
+  group: fanplane.io
+  version: v1alpha1
+  scope: Namespaced
+  names:
+    kind: EnvoyBootstrap
+    plural: envoybootstraps
+    shortNames:
+    - eb
+---
+# To service account contacts kubernetes api is required that the api server is able to be contacted from infra
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: buildkite-fanplane-account
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: fanplane-role
+rules:
+- apiGroups: ["fanplane.io"] # "" indicates the core API group
+  resources: ["envoybootstraps", "gateways"]
+  verbs: ["*"]
+- apiGroups: [""] # "" indicates the core API group
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: fanplane-clusterrole
+subjects:
+- kind: User
+  name: system:serviceaccount:default:{{ .Values.serviceAccount.name }}
+- kind: ServiceAccount
+  name: default
+  namespace: fanplane
+roleRef:
+  kind: ClusterRole
+  name: fanplane-role
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: fanplane-role
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: fanplane
+roleRef:
+  kind: ClusterRole
+  name: fanplane-role
+  apiGroup: rbac.authorization.k8s.io
+
+

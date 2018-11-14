@@ -6,6 +6,7 @@ import (
 	"github.com/ghodss/yaml"
 	"io/ioutil"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // +genclient
@@ -40,6 +41,10 @@ func (in *EnvoyBootstrap) SetObjectMeta(newMeta metav1.ObjectMeta) {
 
 func (in *EnvoyBootstrap) GetSpec() interface{} {
 	return in.Spec
+}
+
+func (in *EnvoyBootstrap) GetObjectKind() schema.ObjectKind {
+	return in
 }
 
 func (in *EnvoyBootstrap) DeepCopyInto(out *EnvoyBootstrap) {
